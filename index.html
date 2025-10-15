@@ -36,6 +36,26 @@
         #results-table tbody tr:hover {
             filter: brightness(1.02);
         }
+
+        /* Styling for the Keep/Discard toggle button */
+        .keep-toggle {
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .keep-toggle:active {
+            transform: scale(0.98);
+        }
+        
+        /* Styling for the quick set duration buttons */
+        .quick-set-btn {
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            transition: background-color 0.1s, transform 0.1s;
+        }
+        .quick-set-btn:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        }
+        .quick-set-btn:active {
+            transform: scale(0.98);
+        }
     </style>
     <script>
         tailwind.config = {
@@ -91,8 +111,8 @@
         <!-- Footer / Instructions -->
         <footer class="mt-8 text-center text-gray-500 text-sm">
             <p>Clips are ordered by **timestamp (Earliest at Top)** and grouped into a single "Scene" if their timestamps are within 30 minutes of each other.</p>
-            <p>This dashboard auto-updates every 60 seconds.</p>
-            <p>To run the server, save both Python and HTML files, and place video files (like **sample_1.mp4**) in the same directory, then execute: <code class="bg-gray-200 p-1 rounded">python app.py</code></p>
+            <p>This dashboard auto-updates every 60 seconds using a lightweight metadata-only endpoint.</p>
+            <p>To run the server, save all three files (`video_classification_db.py`, `app.py`, and `index.html`) in the same directory, and then execute: <code class="bg-gray-200 p-1 rounded">python app.py</code></p>
         </footer>
     </div>
     
@@ -127,15 +147,60 @@
 
                     <div id="modal-short-desc" style="display: none;" class="text-base font-semibold text-gray-800"></div>
 
-                    <!-- Clip Type, Length, Timestamp, AND NEW Scene Indicators Row -->
-                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <!-- Clip Type, Length, Timestamp, AND Scene Indicators Row -->
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
                         <div id="modal-clip-type" class="text-xs px-3 py-1 font-medium rounded-full"></div>
                         <div id="modal-length" class="text-sm font-medium text-indigo-600"></div>
                         <div id="modal-timestamp" class="text-sm text-gray-500"></div>
                         
-                        <!-- NEW SCENE INDICATORS -->
+                        <!-- SCENE INDICATORS -->
                         <div id="scene-indicator-start" style="display: none;" class="px-3 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-700 border border-rose-400">START OF SCENE</div>
                         <div id="scene-indicator-end" style="display: none;" class="px-3 py-1 text-xs font-bold rounded-full bg-cyan-100 text-cyan-700 border border-cyan-400">END OF SCENE</div>
+                    </div>
+                    
+                    <!-- NEW: EDITING DECISIONS SECTION with INTERACTIVE CONTROLS -->
+                    <h4 class="text-lg font-bold text-indigo-700 border-b pb-1 mt-4">Editing Decisions</h4>
+                    <div class="space-y-4">
+                        <!-- KEEP / DISCARD Toggler -->
+                        <div class="flex flex-col gap-2">
+                            <span class="font-semibold text-gray-600">Action:</span>
+                            <button id="toggle-keep-btn" 
+                                class="keep-toggle px-4 py-2 text-sm font-bold rounded-lg shadow-md hover:shadow-lg transition">
+                                Toggle Status
+                            </button>
+                            <!-- Visual status indicator (text updated by JS) -->
+                            <div id="modal-keep-status" class="px-3 py-1 text-xs font-bold rounded-full text-center"></div>
+                        </div>
+
+                        <!-- CLIP CUT DURATION Input -->
+                        <div class="flex flex-col gap-2">
+                            <div class="flex items-center justify-between">
+                                <span class="font-semibold text-gray-600">Cut Length (Seconds):</span>
+                                <span id="modal-cut-source" class="text-xs text-gray-400"></span>
+                            </div>
+                            
+                            <!-- Quick Set Buttons (2s, 4s, 8s, 16s, FULL) -->
+                            <div id="quick-set-buttons" class="grid grid-cols-5 gap-1.5">
+                                <button type="button" data-duration="2" data-key="q" class="quick-set-btn bg-gray-200 text-gray-800 p-1 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">2s (Q)</button>
+                                <button type="button" data-duration="4" data-key="w" class="quick-set-btn bg-gray-200 text-gray-800 p-1 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">4s (W)</button>
+                                <button type="button" data-duration="8" data-key="e" class="quick-set-btn bg-gray-200 text-gray-800 p-1 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">8s (E)</button>
+                                <button type="button" data-duration="16" data-key="r" class="quick-set-btn bg-gray-200 text-gray-800 p-1 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">16s (R)</button>
+                                <button type="button" data-duration="full" data-key="t" class="quick-set-btn bg-indigo-100 text-indigo-700 p-1 rounded-lg text-xs font-bold hover:bg-indigo-200 transition">FULL (T)</button>
+                            </div>
+
+                            <!-- Custom Input Area -->
+                            <div class="flex gap-2 mt-2">
+                                <input id="cut-duration-input" type="number" step="0.1" min="0" 
+                                       placeholder="Enter custom seconds (0 for full video)"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                                <button id="save-duration-btn" 
+                                    class="bg-indigo-500 text-white px-3 py-2 text-sm font-medium rounded-lg hover:bg-indigo-600 transition disabled:opacity-50"
+                                    disabled>
+                                    Save Custom
+                                </button>
+                            </div>
+                            <p id="modal-cut-duration-info" class="text-xs text-gray-500 mt-1"></p>
+                        </div>
                     </div>
                     
                     <!-- Long Description -->
@@ -166,14 +231,32 @@
         const modalLength = document.getElementById('modal-length');
         const modalTimestamp = document.getElementById('modal-timestamp');
         
-        // New Scene Indicator Elements
+        // Scene Indicator Elements
         const sceneStartIndicator = document.getElementById('scene-indicator-start');
         const sceneEndIndicator = document.getElementById('scene-indicator-end');
 
+        // Editing Decision Elements and Controls
+        const modalKeepStatus = document.getElementById('modal-keep-status');
+        const toggleKeepBtn = document.getElementById('toggle-keep-btn');
+        const cutDurationInput = document.getElementById('cut-duration-input');
+        const saveDurationBtn = document.getElementById('save-duration-btn');
+        const modalCutDurationInfo = document.getElementById('modal-cut-duration-info');
+        const modalCutSource = document.getElementById('modal-cut-source');
+        const quickSetButtonsContainer = document.getElementById('quick-set-buttons'); 
 
-        // Global state for navigation
-        let currentResults = [];
+        // Global state for navigation and current file context
+        let currentResults = []; // This will now hold metadata *without* thumbnails
         let currentIndex = -1;
+        let currentFilename = null;
+
+        // Map for keyboard shortcuts
+        const durationKeyMap = {
+            'q': 2,
+            'w': 4,
+            'e': 8,
+            'r': 16,
+            't': 'full'
+        };
 
         // --- SCENE CLUSTERING CONFIGURATION ---
         const THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
@@ -188,8 +271,6 @@
 
         /**
          * Converts ISO timestamp (from SQLite) into a human-readable format.
-         * @param {string} isoString 
-         * @returns {string} Formatted date/time
          */
         function formatTimestamp(isoString) {
             if (!isoString) return 'N/A';
@@ -201,8 +282,6 @@
 
         /**
          * Converts ISO timestamp to Unix milliseconds for calculations.
-         * @param {string} isoString 
-         * @returns {number} Unix milliseconds
          */
         function getTimeInMs(isoString) {
             if (!isoString) return 0;
@@ -210,15 +289,23 @@
         }
 
         /**
-         * Converts seconds into MM:SS format.
-         * @param {number} totalSeconds 
-         * @returns {string} Formatted time
+         * Converts seconds into MM:SS.S format (including one decimal place for cut precision).
          */
         function formatLength(totalSeconds) {
             if (typeof totalSeconds !== 'number' || isNaN(totalSeconds) || totalSeconds < 0) return 'N/A';
+            // Round to 1 decimal point for display
+            totalSeconds = parseFloat(totalSeconds.toFixed(1)); 
             const minutes = Math.floor(totalSeconds / 60);
             const seconds = Math.floor(totalSeconds % 60);
-            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            const remainder = totalSeconds % 1;
+            
+            let formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            // If there's a decimal component (e.g., 420.5 seconds), add the decimal part
+            if (remainder > 0) {
+                 formatted += `.${String(Math.round(remainder * 10)).charAt(0)}`;
+            }
+
+            return formatted;
         }
 
         /**
@@ -249,6 +336,7 @@
             modal.classList.add('hidden');
             document.body.style.overflow = ''; // Restore background scrolling
             currentIndex = -1; // Reset index when closed
+            currentFilename = null;
             modalVideo.pause(); // Stop video playback
             // Reset media display back to thumbnail/poster view
             modalVideo.style.display = 'none';
@@ -257,31 +345,229 @@
         }
 
         /**
-         * Loads the data for a given index from the currentResults array and updates the modal content.
-         * This function is used for both initial clicks and keyboard navigation.
+         * Helper function to send POST requests to the new API endpoints.
          */
-        function displayModalForIndex(index) {
+        async function sendUpdate(url, payload) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.statusText}`);
+                }
+                // Refresh the table using the lightweight endpoint to show the immediate update
+                fetchResults(false); 
+                return true;
+            } catch (error) {
+                console.error("Update failed:", error);
+                return false;
+            }
+        }
+
+        /**
+         * Toggles the 'keep' status and updates the database.
+         */
+        async function sendKeepUpdate() {
+            const result = currentResults[currentIndex];
+            if (!result || !currentFilename) return;
+
+            // Toggle the status: 1 -> 0, 0 -> 1
+            const newKeepStatus = result.keep === 1 ? 0 : 1;
+            
+            toggleKeepBtn.disabled = true;
+            toggleKeepBtn.textContent = 'Saving...';
+
+            const success = await sendUpdate('/api/update_keep', { 
+                filename: currentFilename, 
+                keep: newKeepStatus 
+            });
+
+            if (success) {
+                // Manually update the local data temporarily to reflect change immediately in the modal
+                result.keep = newKeepStatus; 
+                updateKeepStatusUI(result);
+            } else {
+                // Restore the UI state if saving fails
+                updateKeepStatusUI(result); 
+                console.error("Failed to toggle keep status.");
+            }
+            toggleKeepBtn.disabled = false;
+        }
+
+        /**
+         * Handles updating the clip duration, either from a quick button or custom input.
+         * @param {number|string|null} [durationValue] - If provided, uses this value (e.g., 2, 4, 8, 16, or 'full'). If null/undefined, uses input field value.
+         */
+        async function handleDurationUpdate(durationValue = undefined) {
+            if (!currentFilename || currentIndex === -1) return;
+
+            let duration = null;
+            let source = '';
+
+            if (durationValue !== undefined) {
+                // Quick button/key press path
+                if (durationValue === 'full' || durationValue === 0) {
+                    duration = null;
+                    source = 'Quick (FULL)';
+                } else {
+                    duration = parseFloat(durationValue);
+                    source = `Quick (${durationValue}s)`;
+                }
+            } else {
+                // Custom input path
+                const inputValue = cutDurationInput.value.trim();
+                if (inputValue === '') {
+                    duration = null; // Reset to full video
+                    source = 'Custom (FULL)';
+                } else {
+                    duration = parseFloat(inputValue);
+                    if (isNaN(duration) || duration < 0) {
+                        console.error('Invalid duration entered.');
+                        return;
+                    }
+                    source = 'Custom';
+                }
+            }
+            
+            const originalLength = currentResults[currentIndex].video_length_seconds;
+            if (duration !== null && duration > originalLength) {
+                console.warn(`Duration ${duration}s exceeds video length ${originalLength}s. Setting to max length.`);
+                duration = originalLength; 
+                // Note: The UI for the input will be updated in updateCutDurationUI
+            }
+
+            // Set buttons/input state during submission
+            saveDurationBtn.disabled = true;
+            saveDurationBtn.textContent = 'Saving...';
+            document.querySelectorAll('.quick-set-btn').forEach(btn => btn.disabled = true);
+
+            const success = await sendUpdate('/api/update_duration', { 
+                filename: currentFilename, 
+                duration: duration 
+            });
+
+            if (success) {
+                // Manually update the local data temporarily
+                currentResults[currentIndex].clip_cut_duration = duration;
+                updateCutDurationUI(currentResults[currentIndex], source);
+            }
+            
+            // Restore buttons/input state
+            saveDurationBtn.disabled = true; // Disable until custom input changes again
+            saveDurationBtn.textContent = 'Save Custom';
+            document.querySelectorAll('.quick-set-btn').forEach(btn => btn.disabled = false);
+        }
+
+        
+        /**
+         * Updates the visual state of the Keep/Discard controls in the modal.
+         */
+        function updateKeepStatusUI(result) {
+            const isKeep = result.keep === 1;
+            if (isKeep) {
+                modalKeepStatus.textContent = 'Status: KEEP';
+                modalKeepStatus.className = 'px-3 py-1 text-xs font-bold rounded-full text-center bg-emerald-100 text-emerald-800';
+                toggleKeepBtn.textContent = 'Switch to DISCARD (D)';
+                toggleKeepBtn.classList.remove('bg-red-500', 'hover:bg-red-600', 'text-white');
+                toggleKeepBtn.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white');
+            } else {
+                modalKeepStatus.textContent = 'Status: DISCARD';
+                modalKeepStatus.className = 'px-3 py-1 text-xs font-bold rounded-full text-center bg-red-100 text-red-800';
+                toggleKeepBtn.textContent = 'Switch to KEEP (D)';
+                toggleKeepBtn.classList.remove('bg-green-500', 'hover:bg-green-600', 'text-white');
+                toggleKeepBtn.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white');
+            }
+        }
+
+        /**
+         * Updates the visual state of the Cut Duration controls in the modal.
+         * @param {Object} result - The current video result object.
+         * @param {string} [source='Initial'] - The source of the update (for display).
+         */
+        function updateCutDurationUI(result, source = 'Initial') {
+            const cutDuration = result.clip_cut_duration;
+            const originalLength = result.video_length_seconds;
+            
+            let displayDuration;
+            let sourceText;
+            let inputInitialValue = '';
+
+            if (cutDuration !== null && cutDuration > 0 && cutDuration < originalLength) {
+                displayDuration = formatLength(cutDuration) + 's';
+                sourceText = `(Custom Cut, from ${source})`;
+                inputInitialValue = cutDuration.toFixed(1);
+            } else if (cutDuration !== null && cutDuration >= originalLength) {
+                // Handle cases where duration was set to be >= original length (should be maxed out)
+                 displayDuration = formatLength(originalLength) + 's';
+                 sourceText = `(Full Length Used, from ${source})`;
+                 inputInitialValue = originalLength.toFixed(1); // Show max value in the input field
+            } else {
+                displayDuration = formatLength(originalLength) + 's';
+                sourceText = `(Full Length Used, from ${source})`;
+                inputInitialValue = ''; // Empty input box for full length
+            }
+            
+            modalCutDurationInfo.textContent = `Current Cut: ${displayDuration} (Original: ${formatLength(originalLength)}s)`;
+            modalCutSource.textContent = sourceText;
+            cutDurationInput.value = inputInitialValue;
+            saveDurationBtn.disabled = true; // Disable save button until input changes
+        }
+
+        /**
+         * Loads the data for a given index from the currentResults array and updates the modal content.
+         */
+        async function displayModalForIndex(index) {
             if (index < 0 || index >= currentResults.length) {
                 return; // Index out of bounds
             }
 
             const result = currentResults[index];
             currentIndex = index; // Set global index for keyboard navigation
+            currentFilename = result.filename; // Set global filename for updates
             
             const clipType = result.clip_type || 'Unclassified';
-            const rawBase64 = result.video_thumbnail_base64;
-            const thumbnailSrc = rawBase64 
-                ? `data:image/png;base64,${rawBase64}` 
-                : 'https://placehold.co/56x32/cccccc/ffffff?text=NO+IMG';
+            const videoFilename = result.filename || ''; // Use result.filename directly as it's the identifier
             
+            let rawBase64 = result.video_thumbnail_base64; // May be undefined/null from metadata endpoint
+            let thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=LOADING...';
+
+            // 1. --- Thumbnail Fetching (Optimized: Fetch only if missing) ---
+            if (!rawBase64 && videoFilename) {
+                try {
+                    // Fetch thumbnail using the new dedicated endpoint
+                    const thumbResponse = await fetch(`/api/thumbnail/${encodeURIComponent(videoFilename)}`);
+                    if (thumbResponse.ok) {
+                        const thumbData = await thumbResponse.json();
+                        rawBase64 = thumbData.video_thumbnail_base64;
+                        // Cache the thumbnail in the local result object so we don't fetch it again 
+                        // while the user is navigating the modal.
+                        result.video_thumbnail_base64 = rawBase64; 
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch thumbnail:", e);
+                }
+            }
+
+            // Set final thumbnail source
+            if (rawBase64) {
+                 thumbnailSrc = `data:image/png;base64,${rawBase64}`;
+            } else {
+                thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=NO+IMG';
+            }
+
+
+            // 2. --- Modal Content Setup ---
+
             const formattedDate = formatTimestamp(result.video_timestamp);
             const formattedLength = formatLength(result.video_length_seconds);
-            const videoFilename = result.video_filename || ''; 
 
-            // 1. --- Media Setup ---
             modalTitle.textContent = result.video_description_short;
             modalFilename.textContent = result.filename;
 
+            // Media setup (video/image)
             if (videoFilename) {
                 const videoUrl = `/video/${videoFilename}`;
                 modalImage.src = thumbnailSrc;
@@ -304,10 +590,10 @@
                 videoMessage.textContent = 'Video file path is missing or the file was not found on the server.';
             }
 
-            // 2. --- Metadata Setup ---
+            // Classification Metadata Setup
             modalShortDesc.textContent = result.video_description_short; 
             modalLongDesc.textContent = result.video_description_long;
-            modalLength.textContent = `Length: ${formattedLength}`;
+            modalLength.textContent = `Original: ${formattedLength}s`;
             modalTimestamp.textContent = `Date: ${formattedDate}`;
             
             // Clip Type Styling
@@ -322,21 +608,16 @@
             modalClipType.className = `text-xs px-3 py-1 font-medium rounded-full ${clipClass}`;
             modalClipType.textContent = clipType;
 
-            // 3. --- Scene Indicator Logic ---
-            if (result.isFirstInScene) {
-                sceneStartIndicator.style.display = 'block';
-            } else {
-                sceneStartIndicator.style.display = 'none';
-            }
+            // Scene Indicator Logic
+            sceneStartIndicator.style.display = result.isFirstInScene ? 'block' : 'none';
+            sceneEndIndicator.style.display = (result.isLastInScene && !result.isFirstInScene) ? 'block' : 'none';
+            
+            // Editing Decision Logic & UI Setup
+            updateKeepStatusUI(result);
+            updateCutDurationUI(result, 'load');
 
-            // Only show END if it is NOT also the start (i.e., not a single-clip scene)
-            if (result.isLastInScene && !result.isFirstInScene) { 
-                sceneEndIndicator.style.display = 'block';
-            } else {
-                 sceneEndIndicator.style.display = 'none';
-            }
 
-            // 4. Show Modal if not already visible
+            // 3. Show Modal if not already visible
             if (modal.classList.contains('hidden')) {
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
@@ -347,7 +628,7 @@
 
         /**
          * Renders the data into the HTML table body, applying scene clustering and calculating scene boundary flags.
-         * @param {Array<Object>} results - List of classification result dictionaries.
+         * @param {Array<Object>} results - List of classification result dictionaries (metadata only).
          */
         function renderTable(results) {
             // 1. Sort results by timestamp (ASCENDING order: earliest first)
@@ -395,7 +676,7 @@
                 sortedResults[sortedResults.length - 1].isLastInScene = true;
             }
 
-            // Store the enriched results globally
+            // Store the enriched results globally (Metadata only, thumbnails excluded)
             currentResults = sortedResults;
             tableBody.innerHTML = ''; // Clear existing rows
 
@@ -419,10 +700,8 @@
 
                 // --- Rest of the rendering logic ---
                 const clipType = result.clip_type || 'Unclassified';
-                const rawBase64 = result.video_thumbnail_base64;
-                const thumbnailSrc = rawBase64 
-                    ? `data:image/png;base64,${rawBase64}` 
-                    : 'https://placehold.co/56x32/cccccc/ffffff?text=NO+IMG';
+                // Placeholder image for the table view since we skipped fetching the base64 data
+                const thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=THUMB';
                 
                 const formattedDate = formatTimestamp(result.video_timestamp);
                 const formattedLength = formatLength(result.video_length_seconds);
@@ -436,6 +715,11 @@
                 } else if (clipType.includes('Tutorial')) {
                     clipClass = 'bg-blue-100 text-blue-800';
                 }
+                
+                // Determine styling for the KEEP status to show on the main table
+                const isKeep = result.keep === 1;
+                const keepText = isKeep ? 'KEEP' : 'DISCARD';
+                const keepClass = isKeep ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800';
 
                 const row = document.createElement('tr');
                 // Apply the scene color and background class here
@@ -447,6 +731,7 @@
                     <td class="px-6 py-4 text-sm text-gray-900">
                         <div class="flex items-center cursor-pointer thumbnail-trigger" 
                              data-index="${index}">
+                            <!-- Using a placeholder image for speed, actual thumbnail fetched on click -->
                             <img src="${thumbnailSrc}" alt="Thumbnail" class="w-14 h-8 object-cover rounded mr-3 shadow">
                             <div>
                                 <div class="font-medium truncate max-w-[200px]">${result.filename}</div>
@@ -459,13 +744,18 @@
                         <div class="font-semibold text-gray-700">${result.video_description_short}</div>
                         <div class="text-xs text-gray-500 mt-1">${result.video_description_long}</div>
                     </td>
-                    <!-- 3. Clip Type / Length -->
+                    <!-- 3. Clip Type / Length / KEEP Status -->
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${clipClass}">
                             ${clipType}
                         </span>
-                        <div class="text-xs font-semibold text-indigo-500 mt-2" title="Video Length">
-                            Length: ${formattedLength}
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="px-2 py-0.5 inline-flex text-xs font-medium rounded-full ${keepClass}">
+                                ${keepText}
+                            </span>
+                             <div class="text-xs font-semibold text-indigo-500" title="Video Length">
+                                ${formatLength(result.video_length_seconds)}s
+                            </div>
                         </div>
                     </td>
                     <!-- 4. Model (lg+) -->
@@ -481,12 +771,16 @@
         }
 
         /**
-         * Fetches data from the API and updates the table.
+         * Fetches data from the new lightweight API and updates the table.
+         * @param {boolean} showLoading - If true, displays a loading message.
          */
-        async function fetchResults() {
-            statusEl.innerHTML = '<span class="font-semibold text-blue-500">Loading...</span>';
+        async function fetchResults(showLoading = true) {
+            if (showLoading) {
+                statusEl.innerHTML = '<span class="font-semibold text-blue-500">Loading Metadata...</span>';
+            }
             try {
-                const response = await fetch('/api/results');
+                // *** Using the new lightweight metadata endpoint ***
+                const response = await fetch('/api/metadata'); 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -496,7 +790,7 @@
 
             } catch (error) {
                 console.error("Failed to fetch classification results:", error);
-                statusEl.innerHTML = '<span class="font-semibold text-red-500">Error:</span> Could not connect to server.';
+                statusEl.innerHTML = '<span class="font-semibold text-red-500">Error:</span> Could not connect to server. Run `python app.py`.';
             }
         }
 
@@ -511,7 +805,6 @@
         tableBody.addEventListener('click', (e) => {
             const trigger = e.target.closest('.thumbnail-trigger');
             if (trigger) {
-                // Now we only need to extract the index
                 const index = parseInt(trigger.getAttribute('data-index'));
                 displayModalForIndex(index);
             }
@@ -519,11 +812,39 @@
 
         // --- Event Listener for Thumbnail Click inside Modal (Click-to-Play) ---
         modalImage.addEventListener('click', playVideo);
+        
+        // --- Event Listeners for Editing Controls ---
+        toggleKeepBtn.addEventListener('click', sendKeepUpdate);
+
+        // Delegation for the quick set duration buttons
+        quickSetButtonsContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('.quick-set-btn');
+            if (button) {
+                const duration = button.getAttribute('data-duration');
+                handleDurationUpdate(duration);
+            }
+        });
+
+        // Event listener for the custom input field
+        cutDurationInput.addEventListener('input', () => {
+            const inputValue = cutDurationInput.value.trim();
+            // Enable save button if input is non-empty, or explicitly 0 (which resets to full), 
+            // and it's not obviously non-numeric (though parseFloat will handle this during save)
+            saveDurationBtn.disabled = inputValue === '' ? false : isNaN(parseFloat(inputValue));
+        });
+        
+        // Event listener for the custom save button
+        saveDurationBtn.addEventListener('click', () => handleDurationUpdate());
+
 
         // --- Keyboard Navigation Handler ---
         document.addEventListener('keyup', (e) => {
             // Check if the modal is currently open and if there are results to navigate
             if (modal.classList.contains('flex') && currentResults.length > 0) {
+                
+                const key = e.key.toLowerCase(); // Define key here for all subsequent checks
+
+                // 1. Navigation (Left/Right)
                 if (e.key === 'ArrowRight') {
                     e.preventDefault(); // Prevent page scroll
                     const newIndex = (currentIndex + 1) % currentResults.length;
@@ -534,6 +855,21 @@
                     displayModalForIndex(newIndex);
                 } else if (e.key === 'Escape') {
                     closeModal();
+                }
+
+                // 2. Keep/Discard Toggle (D)
+                if (key === 'd') {
+                    e.preventDefault();
+                    sendKeepUpdate();
+                }
+
+                // 3. Quick Duration Update (Q, W, E, R, T)
+                if (durationKeyMap.hasOwnProperty(key)) {
+                    // Prevent key press from interfering with other elements
+                    e.preventDefault(); 
+                    const durationToSet = durationKeyMap[key];
+                    // Call the unified update handler with the predefined duration
+                    handleDurationUpdate(durationToSet);
                 }
             }
         });

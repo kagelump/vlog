@@ -22,7 +22,10 @@ Classify the clip as a talking, transit, establishing, action shot, etc, or othe
     * action - Subjects in the shot are doing an activity
     * closeup - Tight focus on a small object, texture, or specific detail
 
-Find the most representative frame to use as a video thumbnail (frame number).
+Find the most best frame to use as a video thumbnail.
+The thumbnail should have good visual quality, focused subject, and/or representativeness.
+
+Give a rating of the quality of the clip from 0.0 for poor quality to 1.0 for great quality.
 
 Use JSON as output, using the following keys:
 
@@ -30,6 +33,7 @@ Use JSON as output, using the following keys:
     * 'short_name' (str)
     * 'clip_type' (str)
     * 'thumbnail_frame' (int)
+    * 'rating' (float)
 """
 
 def describe_video(model, processor, config, video_path, prompt="Describe this video", fps=1.0, max_pixels=224*224, **generate_kwargs):
@@ -89,7 +93,10 @@ def describe_video(model, processor, config, video_path, prompt="Describe this v
         **generate_kwargs,
     )
 
-    return json.loads(response.text)
+    try:
+        return json.loads(response.text)
+    except Exception:
+        raise Exception('Could not deserialize {response.text}')
 
 def describe_videos_in_dir(directory, model_name, prompt="Describe this video", fps=1.0, **generate_kwargs):
     """
