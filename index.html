@@ -94,11 +94,16 @@
                 <table id="results-table" class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-100 sticky top-0 shadow-sm">
                         <tr>
+                            <!-- Column 1: File / Date -->
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File / Date</th>
+                            <!-- Column 2: Description (Responsive) -->
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Description</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clip Type / Length</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Model</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Class. Time (s)</th>
+                            <!-- Column 3: Clip Type / Length (Original) -->
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clip Type / Length (s)</th>
+                            <!-- Column 4: Keep Status (NEW) -->
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Keep Status</th>
+                            <!-- Column 5: Cut Length (NEW) -->
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cut Length</th>
                         </tr>
                     </thead>
                     <tbody id="table-body" class="bg-white divide-y divide-gray-100">
@@ -118,8 +123,8 @@
     
     <!-- Fullscreen Modal for Video Playback/Thumbnail View -->
     <div id="thumbnail-modal" class="fixed inset-0 z-50 bg-black bg-opacity-80 hidden items-center justify-center p-4 transition-opacity duration-300" onclick="closeModal()">
-        <!-- Modal Size Increased to max-w-6xl -->
-        <div class="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onclick="event.stopPropagation()">
+        <!-- Modal Size Increased to max-w-6xl. CHANGED overflow-hidden to overflow-y-auto to allow scrolling. -->
+        <div class="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
                 <h3 id="modal-title" class="text-xl font-semibold text-indigo-800 truncate"></h3>
                 <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition">
@@ -206,7 +211,8 @@
                     <!-- Long Description -->
                     <div class="pt-2 border-t mt-3">
                         <h5 class="text-sm font-semibold text-gray-600 mb-1">Full Description</h5>
-                        <p id="modal-long-desc" class="text-xs text-gray-600 max-h-40 overflow-y-auto p-1 border rounded bg-gray-50"></p>
+                        <!-- Removed max-h-40 and overflow-y-auto to allow full expansion -->
+                        <p id="modal-long-desc" class="text-xs text-gray-600 p-1 border rounded bg-gray-50"></p>
                     </div>
                 </div>
             </div>
@@ -487,7 +493,7 @@
          * @param {Object} result - The current video result object.
          * @param {string} [source='Initial'] - The source of the update (for display).
          */
-        function updateCutDurationUI(result, source = 'Initial') {
+        function updateCutDurationUI(result, source = 'load') {
             const cutDuration = result.clip_cut_duration;
             const originalLength = result.video_length_seconds;
             
@@ -592,6 +598,7 @@
 
             // Classification Metadata Setup
             modalShortDesc.textContent = result.video_description_short; 
+            // The following line has been updated to remove height constraint
             modalLongDesc.textContent = result.video_description_long;
             modalLength.textContent = `Original: ${formattedLength}s`;
             modalTimestamp.textContent = `Date: ${formattedDate}`;
@@ -694,6 +701,7 @@
                 // Add a visual separator when a new scene begins (for multi-clip scenes only)
                 if (result.isFirstInScene && index > 0) {
                     const separatorRow = document.createElement('tr');
+                    // Changed colspan to 5 since we now have 5 columns
                     separatorRow.innerHTML = `<td colspan="5" class="p-2 border-t-4 border-dashed border-gray-300 bg-gray-100 text-center text-xs font-semibold text-gray-500">--- Scene Break: Clips are over 30 minutes apart ---</td>`;
                     tableBody.appendChild(separatorRow);
                 }
@@ -704,8 +712,7 @@
                 const thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=THUMB';
                 
                 const formattedDate = formatTimestamp(result.video_timestamp);
-                const formattedLength = formatLength(result.video_length_seconds);
-
+                
                 // Determine styling for Clip Type
                 let clipClass = 'bg-gray-100 text-gray-800';
                 if (clipType.includes('Main')) {
@@ -716,10 +723,22 @@
                     clipClass = 'bg-blue-100 text-blue-800';
                 }
                 
-                // Determine styling for the KEEP status to show on the main table
+                // --- NEW COLUMN LOGIC: KEEP STATUS ---
                 const isKeep = result.keep === 1;
                 const keepText = isKeep ? 'KEEP' : 'DISCARD';
                 const keepClass = isKeep ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800';
+
+                // --- NEW COLUMN LOGIC: CUT LENGTH ---
+                const originalLength = result.video_length_seconds;
+                const cutDuration = result.clip_cut_duration;
+                
+                const cutDisplay = (cutDuration === null || cutDuration >= originalLength)
+                    ? 'FULL' 
+                    : formatLength(cutDuration) + 's';
+                
+                const cutClass = cutDuration !== null && cutDuration < originalLength
+                    ? 'font-bold text-red-500' // Highlight custom cut
+                    : 'text-gray-500';
 
                 const row = document.createElement('tr');
                 // Apply the scene color and background class here
@@ -739,29 +758,30 @@
                             </div>
                         </div>
                     </td>
-                    <!-- 2. Description cell -->
+                    <!-- 2. Description cell (Responsive) -->
                     <td class="px-6 py-4 text-sm text-gray-500 hidden sm:table-cell whitespace-normal max-w-lg">
-                        <div class="font-semibold text-gray-700">${result.video_description_short}</div>
-                        <div class="text-xs text-gray-500 mt-1">${result.video_description_long}</div>
+                        <div class="font-semibold text-gray-700 truncate">${result.video_description_short}</div>
+                        <div class="text-xs text-gray-500 mt-1 truncate">${result.video_description_long}</div>
                     </td>
-                    <!-- 3. Clip Type / Length / KEEP Status -->
+                    <!-- 3. Clip Type / Original Length -->
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${clipClass}">
                             ${clipType}
                         </span>
-                        <div class="flex items-center gap-2 mt-2">
-                            <span class="px-2 py-0.5 inline-flex text-xs font-medium rounded-full ${keepClass}">
-                                ${keepText}
-                            </span>
-                             <div class="text-xs font-semibold text-indigo-500" title="Video Length">
-                                ${formatLength(result.video_length_seconds)}s
-                            </div>
+                        <div class="text-xs font-semibold text-indigo-500 mt-1" title="Original Video Length">
+                            ${formatLength(originalLength)}s (Orig)
                         </div>
                     </td>
-                    <!-- 4. Model (lg+) -->
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">${result.classification_model}</td>
-                    <!-- 5. Time (s) -->
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-indigo-600">${result.classification_time_seconds.toFixed(3)}</td>
+                    <!-- 4. Keep Status (NEW COLUMN) -->
+                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                        <span class="px-2 py-0.5 inline-flex text-xs font-medium rounded-full ${keepClass}">
+                            ${keepText}
+                        </span>
+                    </td>
+                    <!-- 5. Cut Length (NEW COLUMN) -->
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm ${cutClass}">
+                        ${cutDisplay}
+                    </td>
                 `;
                 tableBody.appendChild(row);
             });

@@ -3,12 +3,13 @@ from flask import Flask, jsonify, request, send_from_directory, g
 # Import all required functions from the dedicated database module
 from db import get_all_metadata, get_thumbnail_by_filename, \
                update_keep_status, update_cut_duration
+import os
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'a_secure_random_key_here'
 DATABASE = 'video_results.db'
-VIDEO_DIR = 'mock_videos' # Directory where dummy video files are assumed to be located
+VIDEO_DIR = os.getcwd()
 
 # --- Database Connection Helper (Required for Flask's context) ---
 
