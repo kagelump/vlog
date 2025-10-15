@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Classification Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar styling for the results container */
+        .results-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .results-container::-webkit-scrollbar-thumb {
+            background-color: #6366f1; /* Indigo-500 */
+            border-radius: 4px;
+        }
+        .results-container::-webkit-scrollbar-track {
+            background: #f1f5f9; /* Slate-100 */
+        }
+        .text-shadow {
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        /* Custom styling for the clickable thumbnail (video poster) */
+        .video-poster {
+            transition: transform 0.2s;
+        }
+        .video-poster:hover {
+            transform: scale(1.01);
+            opacity: 0.95;
+        }
+        
+        /* Ensure table rows respect the left border for scene coloring */
+        #results-table tbody tr {
+            transition: all 0.3s ease-in-out;
+        }
+        #results-table tbody tr:hover {
+            filter: brightness(1.02);
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    
+    <!-- Changed from container mx-auto to w-full to maximize horizontal space -->
+    <div class="w-full p-4 sm:p-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-indigo-700 text-shadow mb-2">
+                Classification Results Monitor
+            </h1>
+            <p id="status-message" class="text-gray-600 text-lg transition-all duration-500">
+                <span class="font-semibold text-green-500">Live:</span> Fetching data every 60 seconds...
+            </p>
+        </header>
+
+        <!-- Results Table Container -->
+        <div class="bg-white shadow-2xl rounded-xl overflow-hidden ring-4 ring-indigo-200/50">
+            <div class="p-6 bg-indigo-50 border-b border-indigo-100 flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-indigo-800">Latest Video Analyses (Clustered by Scene)</h2>
+                <span id="last-updated" class="text-sm font-medium text-indigo-500"></span>
+            </div>
+            
+            <div class="overflow-x-auto results-container">
+                <table id="results-table" class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100 sticky top-0 shadow-sm">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File / Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Description</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clip Type / Length</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Model</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Class. Time (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="bg-white divide-y divide-gray-100">
+                        <tr><td colspan="5" class="text-center py-12 text-gray-400 text-lg">Loading classification results...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Footer / Instructions -->
+        <footer class="mt-8 text-center text-gray-500 text-sm">
+            <p>Clips are ordered by **timestamp (Earliest at Top)** and grouped into a single "Scene" if their timestamps are within 30 minutes of each other.</p>
+            <p>This dashboard auto-updates every 60 seconds.</p>
+            <p>To run the server, save both Python and HTML files, and place video files (like **sample_1.mp4**) in the same directory, then execute: <code class="bg-gray-200 p-1 rounded">python app.py</code></p>
+        </footer>
+    </div>
+    
+    <!-- Fullscreen Modal for Video Playback/Thumbnail View -->
+    <div id="thumbnail-modal" class="fixed inset-0 z-50 bg-black bg-opacity-80 hidden items-center justify-center p-4 transition-opacity duration-300" onclick="closeModal()">
+        <!-- Modal Size Increased to max-w-6xl -->
+        <div class="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
+                <h3 id="modal-title" class="text-xl font-semibold text-indigo-800 truncate"></h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <!-- Modal Content: Two columns for Video/Image and Metadata -->
+            <div class="p-4 flex flex-col md:flex-row gap-6">
+                <!-- Left Column: Video Player - md:w-2/3 (66% width) -->
+                <div class="md:w-2/3 flex flex-col justify-center items-center p-2 bg-gray-100 rounded-lg">
+                    <!-- VIDEO PLAYER ELEMENT - NOTE: Autoplay is omitted here to prevent automatic playback. -->
+                    <video id="modal-video" controls class="max-w-full max-h-[80vh] object-contain rounded-md shadow-lg w-full h-auto" style="display: none;"></video>
+                    <!-- FALLBACK IMAGE/POSTER ELEMENT -->
+                    <img id="modal-image" src="" alt="Thumbnail/Poster" class="max-w-full max-h-[80vh] object-contain rounded-md shadow-lg" style="display: none;">
+                    <div id="video-message" class="p-4 text-sm text-center text-gray-500" style="display: none;"></div>
+                </div>
+                <!-- Right Column: Details - md:w-1/3 (33% width) -->
+                <div class="md:w-1/3 p-2 space-y-3 text-sm">
+                    <h4 class="text-lg font-bold text-indigo-700 border-b pb-1">Video Metadata</h4>
+                    
+                    <div class="text-xs text-gray-500">
+                        <span class="font-semibold text-gray-600">Original File:</span>
+                        <span id="modal-filename" class="ml-1 font-medium text-gray-700 truncate block"></span>
+                    </div>
+
+                    <div id="modal-short-desc" style="display: none;" class="text-base font-semibold text-gray-800"></div>
+
+                    <!-- Clip Type, Length, Timestamp, AND NEW Scene Indicators Row -->
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <div id="modal-clip-type" class="text-xs px-3 py-1 font-medium rounded-full"></div>
+                        <div id="modal-length" class="text-sm font-medium text-indigo-600"></div>
+                        <div id="modal-timestamp" class="text-sm text-gray-500"></div>
+                        
+                        <!-- NEW SCENE INDICATORS -->
+                        <div id="scene-indicator-start" style="display: none;" class="px-3 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-700 border border-rose-400">START OF SCENE</div>
+                        <div id="scene-indicator-end" style="display: none;" class="px-3 py-1 text-xs font-bold rounded-full bg-cyan-100 text-cyan-700 border border-cyan-400">END OF SCENE</div>
+                    </div>
+                    
+                    <!-- Long Description -->
+                    <div class="pt-2 border-t mt-3">
+                        <h5 class="text-sm font-semibold text-gray-600 mb-1">Full Description</h5>
+                        <p id="modal-long-desc" class="text-xs text-gray-600 max-h-40 overflow-y-auto p-1 border rounded bg-gray-50"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tableBody = document.getElementById('table-body');
+        const lastUpdatedEl = document.getElementById('last-updated');
+        const statusEl = document.getElementById('status-message');
+        
+        const modal = document.getElementById('thumbnail-modal');
+        const modalVideo = document.getElementById('modal-video');
+        const modalImage = document.getElementById('modal-image');
+        const modalTitle = document.getElementById('modal-title');
+        const videoMessage = document.getElementById('video-message');
+        
+        const modalFilename = document.getElementById('modal-filename');
+        const modalShortDesc = document.getElementById('modal-short-desc');
+        const modalLongDesc = document.getElementById('modal-long-desc');
+        const modalClipType = document.getElementById('modal-clip-type');
+        const modalLength = document.getElementById('modal-length');
+        const modalTimestamp = document.getElementById('modal-timestamp');
+        
+        // New Scene Indicator Elements
+        const sceneStartIndicator = document.getElementById('scene-indicator-start');
+        const sceneEndIndicator = document.getElementById('scene-indicator-end');
+
+
+        // Global state for navigation
+        let currentResults = [];
+        let currentIndex = -1;
+
+        // --- SCENE CLUSTERING CONFIGURATION ---
+        const THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
+        const SCENE_COLORS = [
+            'border-l-4 border-rose-500 bg-rose-50/70',
+            'border-l-4 border-indigo-500 bg-indigo-50/70',
+            'border-l-4 border-green-500 bg-green-50/70',
+            'border-l-4 border-amber-500 bg-amber-50/70',
+            'border-l-4 border-purple-500 bg-purple-50/70',
+            'border-l-4 border-cyan-500 bg-cyan-50/70',
+        ];
+
+        /**
+         * Converts ISO timestamp (from SQLite) into a human-readable format.
+         * @param {string} isoString 
+         * @returns {string} Formatted date/time
+         */
+        function formatTimestamp(isoString) {
+            if (!isoString) return 'N/A';
+            const date = new Date(isoString);
+            // Format as YYYY-MM-DD HH:MM:SS
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) + ' ' + 
+                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+
+        /**
+         * Converts ISO timestamp to Unix milliseconds for calculations.
+         * @param {string} isoString 
+         * @returns {number} Unix milliseconds
+         */
+        function getTimeInMs(isoString) {
+            if (!isoString) return 0;
+            return new Date(isoString).getTime();
+        }
+
+        /**
+         * Converts seconds into MM:SS format.
+         * @param {number} totalSeconds 
+         * @returns {string} Formatted time
+         */
+        function formatLength(totalSeconds) {
+            if (typeof totalSeconds !== 'number' || isNaN(totalSeconds) || totalSeconds < 0) return 'N/A';
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = Math.floor(totalSeconds % 60);
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        /**
+         * Swaps the thumbnail for the video player and starts playback.
+         */
+        function playVideo() {
+            // Only proceed if the modal is open and the image is marked as a poster
+            if (modal.classList.contains('flex') && modalImage.classList.contains('video-poster')) {
+                modalImage.style.display = 'none';
+                modalVideo.style.display = 'block';
+                modalImage.classList.remove('cursor-pointer', 'video-poster');
+                
+                // Start playback on user interaction
+                modalVideo.play().catch(error => {
+                    console.error("Error attempting to play video:", error);
+                    // Provide feedback if playback fails
+                    videoMessage.style.display = 'block';
+                    videoMessage.textContent = 'Could not start video playback automatically.';
+                });
+            }
+        }
+        
+        /**
+         * Clears the modal, stops video playback, and hides the modal container.
+         */
+        function closeModal() {
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+            document.body.style.overflow = ''; // Restore background scrolling
+            currentIndex = -1; // Reset index when closed
+            modalVideo.pause(); // Stop video playback
+            // Reset media display back to thumbnail/poster view
+            modalVideo.style.display = 'none';
+            modalImage.style.display = 'block';
+            modalImage.classList.add('cursor-pointer', 'video-poster');
+        }
+
+        /**
+         * Loads the data for a given index from the currentResults array and updates the modal content.
+         * This function is used for both initial clicks and keyboard navigation.
+         */
+        function displayModalForIndex(index) {
+            if (index < 0 || index >= currentResults.length) {
+                return; // Index out of bounds
+            }
+
+            const result = currentResults[index];
+            currentIndex = index; // Set global index for keyboard navigation
+            
+            const clipType = result.clip_type || 'Unclassified';
+            const rawBase64 = result.video_thumbnail_base64;
+            const thumbnailSrc = rawBase64 
+                ? `data:image/png;base64,${rawBase64}` 
+                : 'https://placehold.co/56x32/cccccc/ffffff?text=NO+IMG';
+            
+            const formattedDate = formatTimestamp(result.video_timestamp);
+            const formattedLength = formatLength(result.video_length_seconds);
+            const videoFilename = result.video_filename || ''; 
+
+            // 1. --- Media Setup ---
+            modalTitle.textContent = result.video_description_short;
+            modalFilename.textContent = result.filename;
+
+            if (videoFilename) {
+                const videoUrl = `/video/${videoFilename}`;
+                modalImage.src = thumbnailSrc;
+                modalImage.style.display = 'block';
+                // Only add the click-to-play class if there is a video
+                modalImage.classList.add('cursor-pointer', 'video-poster'); 
+                modalVideo.src = videoUrl;
+                modalVideo.poster = thumbnailSrc;
+                modalVideo.load(); 
+                modalVideo.style.display = 'none';
+                modalVideo.pause(); // Ensure it is paused on load
+                videoMessage.style.display = 'none';
+            } else {
+                modalImage.src = thumbnailSrc;
+                modalImage.style.display = 'block';
+                modalImage.classList.remove('cursor-pointer', 'video-poster');
+                modalVideo.style.display = 'none';
+                modalVideo.pause(); 
+                videoMessage.style.display = 'block';
+                videoMessage.textContent = 'Video file path is missing or the file was not found on the server.';
+            }
+
+            // 2. --- Metadata Setup ---
+            modalShortDesc.textContent = result.video_description_short; 
+            modalLongDesc.textContent = result.video_description_long;
+            modalLength.textContent = `Length: ${formattedLength}`;
+            modalTimestamp.textContent = `Date: ${formattedDate}`;
+            
+            // Clip Type Styling
+            let clipClass = 'bg-gray-100 text-gray-800';
+            if (clipType.includes('Main')) {
+                clipClass = 'bg-green-100 text-green-800';
+            } else if (clipType.includes('B-Roll') || clipType.includes('Scenic')) {
+                clipClass = 'bg-yellow-100 text-yellow-800';
+            } else if (clipType.includes('Tutorial')) {
+                clipClass = 'bg-blue-100 text-blue-800';
+            }
+            modalClipType.className = `text-xs px-3 py-1 font-medium rounded-full ${clipClass}`;
+            modalClipType.textContent = clipType;
+
+            // 3. --- Scene Indicator Logic ---
+            if (result.isFirstInScene) {
+                sceneStartIndicator.style.display = 'block';
+            } else {
+                sceneStartIndicator.style.display = 'none';
+            }
+
+            // Only show END if it is NOT also the start (i.e., not a single-clip scene)
+            if (result.isLastInScene && !result.isFirstInScene) { 
+                sceneEndIndicator.style.display = 'block';
+            } else {
+                 sceneEndIndicator.style.display = 'none';
+            }
+
+            // 4. Show Modal if not already visible
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+
+        /**
+         * Renders the data into the HTML table body, applying scene clustering and calculating scene boundary flags.
+         * @param {Array<Object>} results - List of classification result dictionaries.
+         */
+        function renderTable(results) {
+            // 1. Sort results by timestamp (ASCENDING order: earliest first)
+            const sortedResults = results.sort((a, b) => {
+                return getTimeInMs(a.video_timestamp) - getTimeInMs(b.video_timestamp);
+            });
+
+            // 2. Cluster Identification and Flagging Pass
+            let currentSceneId = 0;
+            let lastTimestampMs = 0;
+            let sceneMap = []; // Stores { id: id, start: index, end: index }
+
+            sortedResults.forEach((result, index) => {
+                const currentTimestampMs = getTimeInMs(result.video_timestamp);
+                const timeDiff = currentTimestampMs - lastTimestampMs;
+
+                // Check for a scene break (time difference > threshold or it's the first clip)
+                if (timeDiff > THRESHOLD_MS || index === 0) {
+                    currentSceneId++;
+                    
+                    // Mark the end of the previous scene (unless it's the very first clip)
+                    if (index > 0) {
+                        sortedResults[index - 1].isLastInScene = true;
+                    }
+                    
+                    // Mark the current clip as the start of the new scene
+                    result.isFirstInScene = true;
+                    result.isLastInScene = false; // Default for current clip
+                    sceneMap.push({ id: currentSceneId, start: index, end: index });
+                } else {
+                    // Continuation of current scene
+                    result.isFirstInScene = false;
+                    result.isLastInScene = false;
+                    sceneMap[sceneMap.length - 1].end = index;
+                }
+
+                // Store sceneId for coloring
+                result.sceneId = currentSceneId;
+                
+                lastTimestampMs = currentTimestampMs;
+            });
+
+            // Handle the very last clip in the entire dataset, which is always the end of its scene
+            if (sortedResults.length > 0) {
+                sortedResults[sortedResults.length - 1].isLastInScene = true;
+            }
+
+            // Store the enriched results globally
+            currentResults = sortedResults;
+            tableBody.innerHTML = ''; // Clear existing rows
+
+            if (currentResults.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-12 text-gray-400 text-lg">No classification results found in the database.</td></tr>';
+                return;
+            }
+
+            // 3. Render Table Rows
+            currentResults.forEach((result, index) => {
+                
+                // Assign color class based on the scene index
+                const sceneColorClass = SCENE_COLORS[(result.sceneId - 1) % SCENE_COLORS.length];
+
+                // Add a visual separator when a new scene begins (for multi-clip scenes only)
+                if (result.isFirstInScene && index > 0) {
+                    const separatorRow = document.createElement('tr');
+                    separatorRow.innerHTML = `<td colspan="5" class="p-2 border-t-4 border-dashed border-gray-300 bg-gray-100 text-center text-xs font-semibold text-gray-500">--- Scene Break: Clips are over 30 minutes apart ---</td>`;
+                    tableBody.appendChild(separatorRow);
+                }
+
+                // --- Rest of the rendering logic ---
+                const clipType = result.clip_type || 'Unclassified';
+                const rawBase64 = result.video_thumbnail_base64;
+                const thumbnailSrc = rawBase64 
+                    ? `data:image/png;base64,${rawBase64}` 
+                    : 'https://placehold.co/56x32/cccccc/ffffff?text=NO+IMG';
+                
+                const formattedDate = formatTimestamp(result.video_timestamp);
+                const formattedLength = formatLength(result.video_length_seconds);
+
+                // Determine styling for Clip Type
+                let clipClass = 'bg-gray-100 text-gray-800';
+                if (clipType.includes('Main')) {
+                    clipClass = 'bg-green-100 text-green-800';
+                } else if (clipType.includes('B-Roll') || clipType.includes('Scenic')) {
+                    clipClass = 'bg-yellow-100 text-yellow-800';
+                } else if (clipType.includes('Tutorial')) {
+                    clipClass = 'bg-blue-100 text-blue-800';
+                }
+
+                const row = document.createElement('tr');
+                // Apply the scene color and background class here
+                row.className = `${sceneColorClass} hover:bg-opacity-90 transition-colors duration-200 border-b border-indigo-100`;
+                
+                // HTML for the table row (5 cells)
+                row.innerHTML = `
+                    <!-- 1. File Name / Thumbnail / Timestamp -->
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        <div class="flex items-center cursor-pointer thumbnail-trigger" 
+                             data-index="${index}">
+                            <img src="${thumbnailSrc}" alt="Thumbnail" class="w-14 h-8 object-cover rounded mr-3 shadow">
+                            <div>
+                                <div class="font-medium truncate max-w-[200px]">${result.filename}</div>
+                                <div class="text-xs text-gray-400 mt-0.5" title="Video Timestamp">${formattedDate}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <!-- 2. Description cell -->
+                    <td class="px-6 py-4 text-sm text-gray-500 hidden sm:table-cell whitespace-normal max-w-lg">
+                        <div class="font-semibold text-gray-700">${result.video_description_short}</div>
+                        <div class="text-xs text-gray-500 mt-1">${result.video_description_long}</div>
+                    </td>
+                    <!-- 3. Clip Type / Length -->
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${clipClass}">
+                            ${clipType}
+                        </span>
+                        <div class="text-xs font-semibold text-indigo-500 mt-2" title="Video Length">
+                            Length: ${formattedLength}
+                        </div>
+                    </td>
+                    <!-- 4. Model (lg+) -->
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">${result.classification_model}</td>
+                    <!-- 5. Time (s) -->
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-indigo-600">${result.classification_time_seconds.toFixed(3)}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            // Update last fetched timestamp
+            lastUpdatedEl.textContent = `Last fetched: ${formatTimestamp(new Date().toISOString())}`;
+        }
+
+        /**
+         * Fetches data from the API and updates the table.
+         */
+        async function fetchResults() {
+            statusEl.innerHTML = '<span class="font-semibold text-blue-500">Loading...</span>';
+            try {
+                const response = await fetch('/api/results');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                renderTable(data);
+                statusEl.innerHTML = '<span class="font-semibold text-green-500">Live:</span> Fetching data every 60 seconds...';
+
+            } catch (error) {
+                console.error("Failed to fetch classification results:", error);
+                statusEl.innerHTML = '<span class="font-semibold text-red-500">Error:</span> Could not connect to server.';
+            }
+        }
+
+        // Initial fetch when the page loads
+        fetchResults();
+
+        // Set up the auto-update interval (60000ms = 60 seconds)
+        const updateInterval = 60000;
+        setInterval(fetchResults, updateInterval);
+        
+        // --- Event Delegation for Thumbnail Click in Table ---
+        tableBody.addEventListener('click', (e) => {
+            const trigger = e.target.closest('.thumbnail-trigger');
+            if (trigger) {
+                // Now we only need to extract the index
+                const index = parseInt(trigger.getAttribute('data-index'));
+                displayModalForIndex(index);
+            }
+        });
+
+        // --- Event Listener for Thumbnail Click inside Modal (Click-to-Play) ---
+        modalImage.addEventListener('click', playVideo);
+
+        // --- Keyboard Navigation Handler ---
+        document.addEventListener('keyup', (e) => {
+            // Check if the modal is currently open and if there are results to navigate
+            if (modal.classList.contains('flex') && currentResults.length > 0) {
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault(); // Prevent page scroll
+                    const newIndex = (currentIndex + 1) % currentResults.length;
+                    displayModalForIndex(newIndex);
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault(); // Prevent page scroll
+                    const newIndex = (currentIndex - 1 + currentResults.length) % currentResults.length;
+                    displayModalForIndex(newIndex);
+                } else if (e.key === 'Escape') {
+                    closeModal();
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
