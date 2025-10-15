@@ -27,6 +27,8 @@ The thumbnail should have good visual quality, focused subject, and/or represent
 
 Give a rating of the quality of the clip from 0.0 for poor quality to 1.0 for great quality.
 
+Classify the camera movement as still, panning, moving forward, or random.
+
 Use JSON as output, using the following keys:
 
     * 'description' (str)
@@ -34,6 +36,7 @@ Use JSON as output, using the following keys:
     * 'clip_type' (str)
     * 'thumbnail_frame' (int)
     * 'rating' (float)
+    * 'camera_movement' (str)
 """
 
 def describe_video(model, processor, config, video_path, prompt="Describe this video", fps=1.0, max_pixels=224*224, **generate_kwargs):

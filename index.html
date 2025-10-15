@@ -758,10 +758,18 @@
                             </div>
                         </div>
                     </td>
-                    <!-- 2. Description cell (Responsive) -->
-                    <td class="px-6 py-4 text-sm text-gray-500 hidden sm:table-cell whitespace-normal max-w-lg">
-                        <div class="font-semibold text-gray-700 truncate">${result.video_description_short}</div>
-                        <div class="text-xs text-gray-500 mt-1 truncate">${result.video_description_long}</div>
+                    <!-- 2. Description cell (Responsive) - ADJUSTED FOR BOTTOM ALIGNMENT AND FULL WIDTH -->
+                    <td class="px-6 py-4 hidden sm:table-cell whitespace-normal max-w-lg">
+                        <div class="flex flex-col h-full justify-between">
+                            <!-- Short Description (Top, truncated for space) -->
+                            <div class="font-semibold text-sm text-gray-700 truncate mb-1">
+                                ${result.video_description_short}
+                            </div>
+                            <!-- Long Description (Bottom, allows full width and line wrapping) -->
+                            <div class="text-xs text-gray-500 w-full mt-auto">
+                                ${result.video_description_long}
+                            </div>
+                        </div>
                     </td>
                     <!-- 3. Clip Type / Original Length -->
                     <td class="px-6 py-4 whitespace-nowrap">
