@@ -38,91 +38,14 @@ def initialize_db(db_path=DATABASE):
                 video_timestamp TEXT,
                 video_thumbnail_base64 TEXT,
                 clip_cut_duration REAL,
-                keep INTEGER DEFAULT 1
+                keep INTEGER DEFAULT 1,
+                in_timestamp TEXT,
+                out_timestamp TEXT
             )
         ''')
         conn.commit()
     except sqlite3.Error as e:
         print(f"Database error during initialization: {e}")
-    finally:
-        if conn:
-            conn.close()
-
-def insert_mock_data(db_path=DATABASE):
-    """Inserts mock data into the results table if it doesn't already exist."""
-    
-    video_dir = 'mock_videos'
-    if not os.path.exists(video_dir):
-        os.makedirs(video_dir)
-
-    mock_thumbnail = base64.b64encode(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90\x77\x53\xDE\x00\x00\x00\x0cIDATx\xDAc`\x00\x00\x00\x02\x00\x01\xE2\x21\xBC\x33\x00\x00\x00\x00IEND\xAEB`\x82').decode('utf-8')
-    current_iso_time = datetime.datetime.now().isoformat()
-
-    mock_entries = [
-        {
-            "filename": f"clip_A_{i}.mp4",
-            "timestamp": f"2024-10-15 10:{str(10 + i * 2).zfill(2)}:00",
-            "length": 15.5 + random.random() * 5,
-            "clip_type": random.choice(["Main Action", "B-Roll", "Scenic"]),
-            "description_short": f"Mock event {i} at Location X",
-            "description_long": f"Detailed description of mock event {i}. This clip contains the main action shot from a single camera angle.",
-            "thumbnail": mock_thumbnail,
-            "last_updated": current_iso_time,
-        } for i in range(10)
-    ]
-    
-    mock_entries.extend([
-        {
-            "filename": f"tutorial_B_{i}.mp4",
-            "timestamp": f"2024-10-15 11:{str(50 + i).zfill(2)}:00",
-            "length": 60.0,
-            "clip_type": "Tutorial",
-            "description_short": f"Software tutorial section {i}",
-            "description_long": "Screen recording for a software tutorial. Needs precise cutting.",
-            "thumbnail": mock_thumbnail,
-            "keep": 0, # Discard by default
-            "cut_duration": random.choice([4.2, 8.5]),
-            "last_updated": current_iso_time,
-        } for i in range(3)
-    ])
-
-    conn = None
-    try:
-        conn = get_conn(db_path)
-        cursor = conn.cursor()
-        
-        for entry in mock_entries:
-            # Create a dummy video file
-            with open(os.path.join(video_dir, entry['filename']), 'w') as f:
-                f.write(f"This is a placeholder for video file {entry['filename']}")
-                
-            # Updated to match the new schema and table name 'results'
-            cursor.execute('''
-                INSERT OR IGNORE INTO results 
-                (filename, video_description_long, video_description_short, clip_type, 
-                 last_updated, classification_time_seconds, classification_model, 
-                 video_length_seconds, video_timestamp, video_thumbnail_base64, 
-                 clip_cut_duration, keep)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                entry['filename'],
-                entry['description_long'],
-                entry['description_short'],
-                entry['clip_type'],
-                entry['last_updated'], # New field value
-                round(entry['length'] / 10 + random.random() * 0.5, 3), 
-                random.choice(["Model_V1.2", "Model_V2.1"]),
-                entry['length'],
-                entry['timestamp'],
-                entry['thumbnail'],
-                entry.get('cut_duration', None),
-                entry.get('keep', 1)
-            ))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        pass 
-    except sqlite3.Error as e:
-        print(f"Database error during mock data insertion: {e}")
     finally:
         if conn:
             conn.close()
@@ -140,7 +63,7 @@ def get_all_metadata(conn):
         "filename", "video_description_long", "video_description_short", 
         "clip_type", "last_updated", "classification_time_seconds", 
         "classification_model", "video_length_seconds", "video_timestamp", 
-        "clip_cut_duration", "keep"
+        "clip_cut_duration", "keep", "in_timestamp", "out_timestamp"
     ]
     query = f"SELECT {', '.join(columns)} FROM results"
     
@@ -196,3 +119,47 @@ def update_cut_duration(conn, filename, duration):
         (duration, current_time, filename)
     )
     conn.commit()
+
+def check_if_file_exists(filename: str) -> bool:
+    """
+    Checks if a file with the given filename already exists in the database.
+    :param filename: The filename to check.
+    :return: True if the file exists, False otherwise.
+    """
+    conn = get_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM results WHERE filename = ?", (filename,))
+        return cursor.fetchone() is not None
+    finally:
+        if conn:
+            conn.close()
+
+def insert_result(filename, video_description_long, video_description_short, 
+                  clip_type, classification_time_seconds, classification_model, 
+                  video_length_seconds, video_timestamp, video_thumbnail_base64, 
+                  in_timestamp, out_timestamp):
+    """
+    Inserts a new result into the database.
+    """
+    conn = get_conn()
+    try:
+        cursor = conn.cursor()
+        current_time = datetime.datetime.now().isoformat()
+        cursor.execute("""
+            INSERT INTO results (
+                filename, video_description_long, video_description_short, clip_type, 
+                last_updated, classification_time_seconds, classification_model, 
+                video_length_seconds, video_timestamp, video_thumbnail_base64,
+                in_timestamp, out_timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            filename, video_description_long, video_description_short, clip_type, 
+            current_time, classification_time_seconds, classification_model, 
+            video_length_seconds, video_timestamp, video_thumbnail_base64,
+            in_timestamp, out_timestamp
+        ))
+        conn.commit()
+    finally:
+        if conn:
+            conn.close()

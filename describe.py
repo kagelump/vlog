@@ -1,7 +1,7 @@
 import os
 import json
 import time
-from db import VideoDBManager
+from db import check_if_file_exists, insert_result, initialize_db
 from mlx_vlm import load
 from mlx_vlm.video_generate import generate  # or the appropriate import
 from mlx_vlm.prompt_utils import apply_chat_template
@@ -28,6 +28,7 @@ The thumbnail should have good visual quality, focused subject, and/or represent
 Give a rating of the quality of the clip from 0.0 for poor quality to 1.0 for great quality.
 
 Classify the camera movement as still, panning, moving forward, or random.
+Provide the in and out timestamps for the best segment of the clip to keep.  Try to cut out any unneeded parts at the start (eg reframing) or end.
 
 Use JSON as output, using the following keys:
 
@@ -37,6 +38,8 @@ Use JSON as output, using the following keys:
     * 'thumbnail_frame' (int)
     * 'rating' (float)
     * 'camera_movement' (str)
+    * 'in_timestamp' (str "HH:MM:SS.sss")
+    * 'out_timestamp' (str "HH:MM:SS.sss")
 """
 
 def describe_video(model, processor, config, video_path, prompt="Describe this video", fps=1.0, max_pixels=224*224, **generate_kwargs):
@@ -66,7 +69,7 @@ def describe_video(model, processor, config, video_path, prompt="Describe this v
 
     # process vision info (videos etc) — convert to model-ready inputs
     
-    image_inputs, video_inputs, fps = process_vision_info(messages, return_video_kwargs=True)
+    image_inputs, video_inputs = process_vision_info(messages)
 
     inputs = processor(
         text=[text],
@@ -74,16 +77,24 @@ def describe_video(model, processor, config, video_path, prompt="Describe this v
         videos=video_inputs,
         padding=True,
         return_tensors="pt",
+        video_metadata={'fps': fps, 'total_num_frames': video_inputs[0].shape[0]}
     )
+
     
 
     input_ids = mx.array(inputs["input_ids"])
-    pixel_values = mx.array(inputs["pixel_values_videos"])
     mask = mx.array(inputs["attention_mask"])
     video_grid_thw = mx.array(inputs["video_grid_thw"])
 
     # include kwargs for video layout grid info
     extra = {"video_grid_thw": video_grid_thw}
+
+    pixel_values = inputs.get(
+            "pixel_values_videos", inputs.get("pixel_values", None)
+        )
+    if pixel_values is None:
+        raise ValueError("Please provide a valid video or image input.")
+    pixel_values = mx.array(pixel_values)
 
     response = generate(
         model=model,
@@ -99,7 +110,7 @@ def describe_video(model, processor, config, video_path, prompt="Describe this v
     try:
         return json.loads(response.text)
     except Exception:
-        raise Exception('Could not deserialize {response.text}')
+        raise Exception(f'Could not deserialize {response.text}')
 
 def describe_videos_in_dir(directory, model_name, prompt="Describe this video", fps=1.0, **generate_kwargs):
     """
@@ -109,11 +120,13 @@ def describe_videos_in_dir(directory, model_name, prompt="Describe this video", 
     # load model & processor & config
     model, processor = load(model_name)
     config = load_config(model_name)
-    db = VideoDBManager()
 
     results = {}
     for fname in sorted(os.listdir(directory)):
-        f = db.check_if_file_exists(fname)
+        if not fname.endswith(('.mp4', '.mov', '.avi', '.mkv')):
+            print('Skipping non-video file:', fname)
+            continue
+        f = check_if_file_exists(fname)
         if f:
             print('Already processed', f)
             continue
@@ -140,10 +153,10 @@ def describe_videos_in_dir(directory, model_name, prompt="Describe this video", 
         results[fname] = desc
         thumbnail_frame = int(desc['thumbnail_frame'])
         thumbnail_base64 = get_video_thumbnail(full, thumbnail_frame, fps)
-        db.insert_result(
+        insert_result(
             fname, desc['description'], desc['short_name'],  
             desc.get('clip_type'), time.time() - start_time, model_name, video_length,
-            video_timestamp, thumbnail_base64)
+            video_timestamp, thumbnail_base64, desc.get('in_timestamp'), desc.get('out_timestamp'))
     return results
 
 if __name__ == "__main__":
@@ -151,14 +164,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Describe all videos in a directory.")
     parser.add_argument("directory", type=str, help="Path to the directory containing videos")
-    parser.add_argument("--model", type=str, default="mlx-community/Qwen3-VL-8B-Instruct-4bit",
+    parser.add_argument("--model", type=str, default="mlx-community/Qwen3-VL-8B-Thinking-4bit",
                         help="The model path to use in mlx-vlm")
     parser.add_argument("--prompt", type=str, default=DEAFULT_PROMPT,
                         help="Prompt to pass to the model for describing videos")
     parser.add_argument("--fps", type=float, default=1.0, help="Frames per second to sample from video")
     parser.add_argument("--max_pixels", type=int, default=224*224, help="Max pixel size for frames")
-    parser.add_argument("--max_tokens", type=int, default=200, help="Max generation tokens")
+    parser.add_argument("--max_tokens", type=int, default=10000, help="Max generation tokens")
     args = parser.parse_args()
+    initialize_db()
 
     descs = describe_videos_in_dir(
         args.directory,
