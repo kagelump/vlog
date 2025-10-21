@@ -156,7 +156,8 @@ def describe_videos_in_dir(directory, model_name, prompt="Describe this video", 
         insert_result(
             fname, desc['description'], desc['short_name'],  
             desc.get('clip_type'), time.time() - start_time, model_name, video_length,
-            video_timestamp, thumbnail_base64, desc.get('in_timestamp'), desc.get('out_timestamp'))
+            video_timestamp, thumbnail_base64, desc.get('in_timestamp'), desc.get('out_timestamp'),
+            desc.get('rating', 0.0))
     return results
 
 if __name__ == "__main__":

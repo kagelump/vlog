@@ -40,7 +40,8 @@ def initialize_db(db_path=DATABASE):
                 clip_cut_duration REAL,
                 keep INTEGER DEFAULT 1,
                 in_timestamp TEXT,
-                out_timestamp TEXT
+                out_timestamp TEXT,
+                rating REAL
             )
         ''')
         conn.commit()
@@ -63,7 +64,7 @@ def get_all_metadata(conn):
         "filename", "video_description_long", "video_description_short", 
         "clip_type", "last_updated", "classification_time_seconds", 
         "classification_model", "video_length_seconds", "video_timestamp", 
-        "clip_cut_duration", "keep", "in_timestamp", "out_timestamp"
+        "clip_cut_duration", "keep", "in_timestamp", "out_timestamp", "rating"
     ]
     query = f"SELECT {', '.join(columns)} FROM results"
     
@@ -138,7 +139,7 @@ def check_if_file_exists(filename: str) -> bool:
 def insert_result(filename, video_description_long, video_description_short, 
                   clip_type, classification_time_seconds, classification_model, 
                   video_length_seconds, video_timestamp, video_thumbnail_base64, 
-                  in_timestamp, out_timestamp):
+                  in_timestamp, out_timestamp, rating):
     """
     Inserts a new result into the database.
     """
@@ -151,13 +152,13 @@ def insert_result(filename, video_description_long, video_description_short,
                 filename, video_description_long, video_description_short, clip_type, 
                 last_updated, classification_time_seconds, classification_model, 
                 video_length_seconds, video_timestamp, video_thumbnail_base64,
-                in_timestamp, out_timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                in_timestamp, out_timestamp, rating
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             filename, video_description_long, video_description_short, clip_type, 
             current_time, classification_time_seconds, classification_model, 
             video_length_seconds, video_timestamp, video_thumbnail_base64,
-            in_timestamp, out_timestamp
+            in_timestamp, out_timestamp, rating
         ))
         conn.commit()
     finally:

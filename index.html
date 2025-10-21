@@ -98,10 +98,9 @@
                             <th class="px-4 py-3 text-left text-sm font-semibold text-indigo-900">File</th>
                             <th class="px-4 py-3 text-left text-sm font-semibold text-indigo-900">Description</th>
                             <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-24">Type</th>
-                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-24">Status</th>
-                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-24">Length</th>
-                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-24">Cut</th>
-                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-32">Last Updated</th>
+                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-24">Rating</th>
+                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-32">In Time</th>
+                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-32">Out Time</th>
                         </tr>
                     </thead>
                     <tbody id="table-body">
@@ -290,6 +289,24 @@
         function getTimeInMs(isoString) {
             if (!isoString) return 0;
             return new Date(isoString).getTime();
+        }
+
+        /**
+         * Formats a timestamp in the format HH:MM:SS.ssss
+         */
+        function formatTimecode(timestamp) {
+            if (!timestamp) return 'N/A';
+            try {
+                // Extract hours, minutes, seconds, and milliseconds
+                const [time, milliseconds] = timestamp.split('.');
+                const [hours, minutes, seconds] = time.split(':').map(num => num.padStart(2, '0'));
+                const ms = milliseconds ? milliseconds.padEnd(4, '0').slice(0, 4) : '0000';
+                
+                return `${hours}:${minutes}:${seconds}.${ms}`;
+            } catch (error) {
+                console.error('Error formatting timecode:', error);
+                return 'Invalid';
+            }
         }
 
         /**
@@ -636,6 +653,22 @@
          * @param {Array<Object>} results - List of classification result dictionaries (metadata only).
          */
         function renderTable(results) {
+            // Function to load thumbnail for a specific row
+            async function loadThumbnail(filename, imgElement) {
+                try {
+                    const response = await fetch(`/api/thumbnail/${filename}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.video_thumbnail_base64) {
+                            imgElement.src = `data:image/jpeg;base64,${data.video_thumbnail_base64}`;
+                            imgElement.classList.remove('animate-pulse', 'bg-gray-200');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading thumbnail:', error);
+                }
+            }
+
             // 1. Sort results by timestamp (ASCENDING order: earliest first)
             const sortedResults = results.sort((a, b) => {
                 return getTimeInMs(a.video_timestamp) - getTimeInMs(b.video_timestamp);
@@ -699,8 +732,7 @@
                 // Add a visual separator when a new scene begins (for multi-clip scenes only)
                 if (result.isFirstInScene && index > 0) {
                     const separatorRow = document.createElement('tr');
-                    // Changed colspan to 5 since we now have 5 columns
-                    separatorRow.innerHTML = `<td colspan="5" class="p-2 border-t-4 border-dashed border-gray-300 bg-gray-100 text-center text-xs font-semibold text-gray-500">--- Scene Break: Clips are over 30 minutes apart ---</td>`;
+                    separatorRow.innerHTML = `<td colspan="7" class="p-2 border-t-4 border-dashed border-gray-300 bg-gray-100 text-center text-xs font-semibold text-gray-500">--- Scene Break: Clips are over 30 minutes apart ---</td>`;
                     tableBody.appendChild(separatorRow);
                 }
 
@@ -742,18 +774,21 @@
                 // Apply the scene color and background class here
                 row.className = `${sceneColorClass} hover:bg-opacity-90 transition-colors duration-200 border-b border-indigo-100`;
                 
-                // HTML for the table row (5 cells)
+                // HTML for the table row (now with separate thumbnail column)
                 row.innerHTML = `
-                    <!-- 1. File Name / Thumbnail / Timestamp -->
-                    <td class="px-6 py-4 text-sm text-gray-900">
-                        <div class="flex items-center cursor-pointer thumbnail-trigger" 
-                             data-index="${index}">
-                            <!-- Using a placeholder image for speed, actual thumbnail fetched on click -->
-                            <img src="${thumbnailSrc}" alt="Thumbnail" class="w-14 h-8 object-cover rounded mr-3 shadow">
-                            <div>
-                                <div class="font-medium truncate max-w-[200px]">${result.filename}</div>
-                                <div class="text-xs text-gray-400 mt-0.5" title="Video Timestamp">${formattedDate}</div>
-                            </div>
+                    <!-- Thumbnail Column -->
+                    <td class="px-4 py-4 text-sm">
+                        <div class="w-24 h-16 relative cursor-pointer thumbnail-trigger" data-index="${index}">
+                            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" 
+                                 alt="Loading thumbnail..." 
+                                 class="w-full h-full object-cover rounded shadow bg-gray-200 animate-pulse">
+                        </div>
+                    </td>
+                    <!-- File Name and Timestamp -->
+                    <td class="px-4 py-4 text-sm text-gray-900">
+                        <div class="cursor-pointer thumbnail-trigger" data-index="${index}">
+                            <div class="font-medium truncate max-w-[200px]">${result.filename}</div>
+                            <div class="text-xs text-gray-400 mt-0.5" title="Video Timestamp">${formattedDate}</div>
                         </div>
                     </td>
                     <!-- 2. Description cell (Responsive) - ADJUSTED FOR BOTTOM ALIGNMENT AND FULL WIDTH -->
@@ -769,27 +804,30 @@
                             </div>
                         </div>
                     </td>
-                    <!-- 3. Clip Type / Original Length -->
+                    <!-- 3. Clip Type -->
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${clipClass}">
                             ${clipType}
                         </span>
-                        <div class="text-xs font-semibold text-indigo-500 mt-1" title="Original Video Length">
-                            ${formatLength(originalLength)}s (Orig)
-                        </div>
                     </td>
-                    <!-- 4. Keep Status (NEW COLUMN) -->
+                    <!-- 4. Rating -->
                     <td class="px-6 py-4 whitespace-nowrap text-center">
-                        <span class="px-2 py-0.5 inline-flex text-xs font-medium rounded-full ${keepClass}">
-                            ${keepText}
-                        </span>
+                        <span class="text-sm font-medium">${result.rating ? result.rating.toFixed(1) : 'N/A'}</span>
                     </td>
-                    <!-- 5. Cut Length (NEW COLUMN) -->
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm ${cutClass}">
-                        ${cutDisplay}
+                    <!-- 5. In Timestamp -->
+                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-mono">
+                        ${formatTimecode(result.in_timestamp)}
+                    </td>
+                    <!-- 6. Out Timestamp -->
+                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-mono">
+                        ${formatTimecode(result.out_timestamp)}
                     </td>
                 `;
                 tableBody.appendChild(row);
+                
+                // Start loading the thumbnail for this row
+                const imgElement = row.querySelector('img');
+                loadThumbnail(result.filename, imgElement);
             });
             
             // Update last fetched timestamp
