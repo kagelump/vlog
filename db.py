@@ -3,6 +3,7 @@ import base64
 import random
 import os
 import datetime # Added for the new last_updated field
+import json
 
 # The database file path is defined here
 DATABASE = 'video_results.db'
@@ -30,7 +31,8 @@ def initialize_db(db_path=DATABASE):
                 filename TEXT PRIMARY KEY,
                 video_description_long TEXT,
                 video_description_short TEXT,
-                clip_type TEXT,
+                primary_shot_type TEXT,
+                tags TEXT,
                 last_updated TEXT,
                 classification_time_seconds REAL,
                 classification_model TEXT,
@@ -62,15 +64,30 @@ def get_all_metadata(conn):
     # Updated columns and table name 'results'
     columns = [
         "filename", "video_description_long", "video_description_short", 
-        "clip_type", "last_updated", "classification_time_seconds", 
+        "primary_shot_type", "tags", "last_updated", "classification_time_seconds", 
         "classification_model", "video_length_seconds", "video_timestamp", 
         "clip_cut_duration", "keep", "in_timestamp", "out_timestamp", "rating"
     ]
     query = f"SELECT {', '.join(columns)} FROM results"
     
-    results = conn.execute(query).fetchall()
-    
-    return [dict(row) for row in results]
+    rows = conn.execute(query).fetchall()
+
+    parsed = []
+    for row in rows:
+        d = dict(row)
+        # Normalize tags: stored as JSON string in DB, return as list of strings
+        tags_val = d.get('tags') if 'tags' in d else None
+        if tags_val:
+            try:
+                d['tags'] = json.loads(tags_val)
+            except Exception:
+                # If parsing fails, fallback to empty list
+                d['tags'] = []
+        else:
+            d['tags'] = []
+        parsed.append(d)
+
+    return parsed
 
 def get_thumbnail_by_filename(conn, filename):
     """
@@ -137,7 +154,7 @@ def check_if_file_exists(filename: str) -> bool:
             conn.close()
 
 def insert_result(filename, video_description_long, video_description_short, 
-                  clip_type, classification_time_seconds, classification_model, 
+                  primary_shot_type, tags, classification_time_seconds, classification_model, 
                   video_length_seconds, video_timestamp, video_thumbnail_base64, 
                   in_timestamp, out_timestamp, rating):
     """
@@ -149,13 +166,13 @@ def insert_result(filename, video_description_long, video_description_short,
         current_time = datetime.datetime.now().isoformat()
         cursor.execute("""
             INSERT INTO results (
-                filename, video_description_long, video_description_short, clip_type, 
+                filename, video_description_long, video_description_short, primary_shot_type, tags, 
                 last_updated, classification_time_seconds, classification_model, 
                 video_length_seconds, video_timestamp, video_thumbnail_base64,
                 in_timestamp, out_timestamp, rating
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            filename, video_description_long, video_description_short, clip_type, 
+            filename, video_description_long, video_description_short, primary_shot_type, json.dumps(tags or []), 
             current_time, classification_time_seconds, classification_model, 
             video_length_seconds, video_timestamp, video_thumbnail_base64,
             in_timestamp, out_timestamp, rating

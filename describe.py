@@ -11,16 +11,24 @@ import mlx.core as mx
 from video import get_video_length_and_timestamp, get_video_thumbnail
 
 DEAFULT_PROMPT = """
+You are an expert film editor and cinematographer. 
+Analyze the provided video and classify its shot type according to my internal system, which is .
 Describe this video clip using 1-2 sentences. 
 Then give it a short name to use as a filename.  Use snake_case.
-Classify the clip as a talking, transit, establishing, action shot, etc, or other (explain) type of clip?
 
-    * talking - There is a main subject who is talking to the camera.
-    * transit - Transiting from one place to another.
-    * establishing - Setting the environment, usually ambiance
-    * food - Showcasing food or subjects eating
-    * action - Subjects in the shot are doing an activity
-    * closeup - Tight focus on a small object, texture, or specific detail
+Determine the primary shot type - based on standard film and editing terminology — choose one of the following:
+
+* pov: The camera represents the perspective of a character or subject.
+* insert: A close-up or detailed shot of an object, text, or small action that provides specific information.
+* establishing: A wide or introductory shot that sets the scene or location context.
+
+Add descriptive tags that apply to the shot. Choose all that fit from the following list:
+
+* static: The camera does not move.
+* dynamic: The camera moves (pans, tilts, tracks, zooms, etc.).
+* closeup: Tight framing around a person's face or an object.
+* medium: Frames the subject roughly from the waist up.
+* wide: Shows the subject and significant background context.
 
 Find the most best frame to use as a video thumbnail.
 The thumbnail should have good visual quality, focused subject, and/or representativeness.
@@ -35,7 +43,8 @@ Use JSON as output, using the following keys:
 
     * 'description' (str)
     * 'short_name' (str)
-    * 'clip_type' (str)
+    * 'primary_shot_type' (str)
+    * 'tags' (list of str)
     * 'thumbnail_frame' (int)
     * 'rating' (float)
     * 'camera_movement' (str)

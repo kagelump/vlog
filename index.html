@@ -549,7 +549,7 @@
             currentIndex = index; // Set global index for keyboard navigation
             currentFilename = result.filename; // Set global filename for updates
             
-            const clipType = result.clip_type || 'Unclassified';
+            const primaryShot = result.primary_shot_type || 'Unclassified';
             const videoFilename = result.filename || ''; // Use result.filename directly as it's the identifier
             
             let rawBase64 = result.video_thumbnail_base64; // May be undefined/null from metadata endpoint
@@ -620,15 +620,18 @@
             
             // Clip Type Styling
             let clipClass = 'bg-gray-100 text-gray-800';
-            if (clipType.includes('Main')) {
+            // Map common shot types to color styles
+            if (primaryShot.includes('Close') || primaryShot.includes('Close-up')) {
                 clipClass = 'bg-green-100 text-green-800';
-            } else if (clipType.includes('B-Roll') || clipType.includes('Scenic')) {
+            } else if (primaryShot.includes('B-Roll') || primaryShot.includes('Scenic')) {
                 clipClass = 'bg-yellow-100 text-yellow-800';
-            } else if (clipType.includes('Tutorial')) {
-                clipClass = 'bg-blue-100 text-blue-800';
+            } else if (primaryShot.includes('Aerial') || primaryShot.includes('Drone')) {
+                clipClass = 'bg-purple-100 text-purple-800';
+            } else if (primaryShot.includes('Wide') || primaryShot.includes('Establishing')) {
+                clipClass = 'bg-cyan-100 text-cyan-800';
             }
             modalClipType.className = `text-xs px-3 py-1 font-medium rounded-full ${clipClass}`;
-            modalClipType.textContent = clipType;
+            modalClipType.textContent = primaryShot;
 
             // Scene Indicator Logic
             sceneStartIndicator.style.display = result.isFirstInScene ? 'block' : 'none';
@@ -732,25 +735,27 @@
                 // Add a visual separator when a new scene begins (for multi-clip scenes only)
                 if (result.isFirstInScene && index > 0) {
                     const separatorRow = document.createElement('tr');
-                    separatorRow.innerHTML = `<td colspan="7" class="p-2 border-t-4 border-dashed border-gray-300 bg-gray-100 text-center text-xs font-semibold text-gray-500">--- Scene Break: Clips are over 30 minutes apart ---</td>`;
+                    separatorRow.innerHTML = `<td colspan="8" class="p-2 border-t-4 border-dashed border-gray-300 bg-gray-100 text-center text-xs font-semibold text-gray-500">--- Scene Break: Clips are over 30 minutes apart ---</td>`;
                     tableBody.appendChild(separatorRow);
                 }
 
                 // --- Rest of the rendering logic ---
-                const clipType = result.clip_type || 'Unclassified';
+                const primaryShot = result.primary_shot_type || 'Unclassified';
                 // Placeholder image for the table view since we skipped fetching the base64 data
                 const thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=THUMB';
                 
                 const formattedDate = formatTimestamp(result.video_timestamp);
                 
-                // Determine styling for Clip Type
+                // Determine styling for Primary Shot Type
                 let clipClass = 'bg-gray-100 text-gray-800';
-                if (clipType.includes('Main')) {
+                if (primaryShot.includes('Close') || primaryShot.includes('Close-up')) {
                     clipClass = 'bg-green-100 text-green-800';
-                } else if (clipType.includes('B-Roll') || clipType.includes('Scenic')) {
+                } else if (primaryShot.includes('B-Roll') || primaryShot.includes('Scenic')) {
                     clipClass = 'bg-yellow-100 text-yellow-800';
-                } else if (clipType.includes('Tutorial')) {
-                    clipClass = 'bg-blue-100 text-blue-800';
+                } else if (primaryShot.includes('Aerial') || primaryShot.includes('Drone')) {
+                    clipClass = 'bg-purple-100 text-purple-800';
+                } else if (primaryShot.includes('Wide') || primaryShot.includes('Establishing')) {
+                    clipClass = 'bg-cyan-100 text-cyan-800';
                 }
                 
                 // --- NEW COLUMN LOGIC: KEEP STATUS ---
@@ -769,6 +774,10 @@
                 const cutClass = cutDuration !== null && cutDuration < originalLength
                     ? 'font-bold text-red-500' // Highlight custom cut
                     : 'text-gray-500';
+
+                // Prepare tags HTML (tags come from DB as an array via metadata endpoint)
+                const tagsArray = Array.isArray(result.tags) ? result.tags : (result.tags ? [result.tags] : []);
+                const tagsHtml = tagsArray.length > 0 ? tagsArray.map(tag => `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 mr-1">${tag}</span>`).join(' ') : '<span class="text-xs text-gray-400">—</span>';
 
                 const row = document.createElement('tr');
                 // Apply the scene color and background class here
@@ -804,11 +813,15 @@
                             </div>
                         </div>
                     </td>
-                    <!-- 3. Clip Type -->
+                    <!-- 3. Primary Shot Type -->
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${clipClass}">
-                            ${clipType}
+                            ${primaryShot}
                         </span>
+                    </td>
+                    <!-- 4. Tags -->
+                    <td class="px-4 py-4 whitespace-nowrap">
+                        ${tagsHtml}
                     </td>
                     <!-- 4. Rating -->
                     <td class="px-6 py-4 whitespace-nowrap text-center">
