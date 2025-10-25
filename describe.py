@@ -182,10 +182,20 @@ def describe_videos_in_dir(directory, model_name, prompt="Describe this video", 
         thumbnail_frame = int(desc['thumbnail_frame'])
         thumbnail_base64 = get_video_thumbnail(full, thumbnail_frame, fps)
         insert_result(
-            fname, desc['description'], desc['short_name'],  
-            desc.get('clip_type'), time.time() - start_time, model_name, video_length,
-            video_timestamp, thumbnail_base64, desc.get('in_timestamp'), desc.get('out_timestamp'),
-            desc.get('rating', 0.0))
+            fname,
+            desc['description'],
+            desc['short_name'],
+            desc.get('primary_shot_type'),
+            desc.get('tags', []),
+            time.time() - start_time,
+            model_name,
+            video_length,
+            video_timestamp,
+            thumbnail_base64,
+            desc.get('in_timestamp'),
+            desc.get('out_timestamp'),
+            desc.get('rating', 0.0)
+        )
     return results
 
 if __name__ == "__main__":
