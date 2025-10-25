@@ -28,7 +28,8 @@ The thumbnail should have good visual quality, focused subject, and/or represent
 Give a rating of the quality of the clip from 0.0 for poor quality to 1.0 for great quality.
 
 Classify the camera movement as still, panning, moving forward, or random.
-Provide the in and out timestamps for the best segment of the clip to keep.  Try to cut out any unneeded parts at the start (eg reframing) or end.
+Provide the in and out timestamps for the best segment of the clip to keep.  
+Try to cut out any unneeded parts at the start (eg reframing) or end.
 
 Use JSON as output, using the following keys:
 
@@ -42,11 +43,15 @@ Use JSON as output, using the following keys:
     * 'out_timestamp' (str "HH:MM:SS.sss")
 """
 
-def describe_video(model, processor, config, video_path, prompt="Describe this video", fps=1.0, max_pixels=224*224, **generate_kwargs):
+def describe_video(
+        model, processor, config, video_path, prompt="Describe this video", 
+        fps=1.0, subtitle=None, max_pixels=224*224, **generate_kwargs):
     """
     Describe a single video using mlx-vlm.
     """
     # create message format (this is inferred from how video inference is done in mlx-vlm)  
+    if subtitle:
+        prompt += f"\n\n# Transcript for this video:\n\n{subtitle}\n"
     messages = [
         {
             "role": "user",
@@ -112,6 +117,13 @@ def describe_video(model, processor, config, video_path, prompt="Describe this v
     except Exception:
         raise Exception(f'Could not deserialize {response.text}')
 
+def load_subtitle_file(path):
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+    return None
+
+
 def describe_videos_in_dir(directory, model_name, prompt="Describe this video", fps=1.0, **generate_kwargs):
     """
     Iterate through video files in `directory` and generate descriptions.
@@ -123,7 +135,7 @@ def describe_videos_in_dir(directory, model_name, prompt="Describe this video", 
 
     results = {}
     for fname in sorted(os.listdir(directory)):
-        if not fname.endswith(('.mp4', '.mov', '.avi', '.mkv')):
+        if not fname.lower().endswith(('.mp4', '.mov', '.avi', '.mkv')):
             print('Skipping non-video file:', fname)
             continue
         f = check_if_file_exists(fname)
@@ -133,18 +145,25 @@ def describe_videos_in_dir(directory, model_name, prompt="Describe this video", 
         full = os.path.join(directory, fname)
         if not os.path.isfile(full):
             continue
+
+        subtitle_file = os.path.splitext(full)[0] + '.srt'
+        subtitle_text = load_subtitle_file(subtitle_file)
+
         video_length, video_timestamp = get_video_length_and_timestamp(full)
-        if video_length > 150:
+        if video_length > 120:
             fps = fps / 2.0
         if video_length > 300:
             fps = fps / 2.0
         # filter by extension (e.g. .mp4, .mov, .avi). adjust as needed
         ext = os.path.splitext(fname)[1].lower()
+
         start_time = time.time()
         if ext not in (".mp4", ".mov", ".avi", ".mkv"):
             continue
         try:
-            desc = describe_video(model, processor, config, full, prompt=prompt, fps=fps, **generate_kwargs)
+            desc = describe_video(
+                model, processor, config, full, prompt=prompt, 
+                fps=fps, subtitle=subtitle_text, **generate_kwargs)
         except Exception as e:
             print(f"ERROR: {e}")
             continue
@@ -165,7 +184,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Describe all videos in a directory.")
     parser.add_argument("directory", type=str, help="Path to the directory containing videos")
-    parser.add_argument("--model", type=str, default="mlx-community/Qwen3-VL-8B-Thinking-4bit",
+    # 8B is good enough, Thinking would be better but too slow.  30B would not run well in 24GB RAM.
+    parser.add_argument("--model", type=str, default="mlx-community/Qwen3-VL-8B-Instruct-4bit",
                         help="The model path to use in mlx-vlm")
     parser.add_argument("--prompt", type=str, default=DEAFULT_PROMPT,
                         help="Prompt to pass to the model for describing videos")
