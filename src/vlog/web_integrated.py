@@ -18,7 +18,8 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'a_secure_random_key_here'
+# Use environment variable for secret key, or generate a random one for development
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(24).hex())
 DATABASE = 'video_results.db'
 VIDEO_DIR = os.getcwd()
 STATIC_DIR = PROJECT_ROOT / 'static'

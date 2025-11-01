@@ -10,7 +10,6 @@ import queue
 import time
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, g
-from werkzeug.utils import secure_filename
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -144,7 +143,8 @@ executor = ScriptExecutor()
 def create_launcher_app():
     """Create and configure the launcher Flask app"""
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'launcher_secret_key_change_me'
+    # Use environment variable for secret key, or generate a random one for development
+    app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(24).hex())
     
     LAUNCHER_STATIC_DIR = PROJECT_ROOT / 'static' / 'launcher'
     
