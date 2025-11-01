@@ -114,7 +114,7 @@ def handle_update_cut_duration():
 @app.route('/')
 def index():
     """Serves the main HTML page."""
-    return send_from_directory('../static', 'index.html')
+    return send_from_directory('../../static', 'index.html')
 
 
 # --- Server Start ---
