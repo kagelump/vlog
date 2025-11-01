@@ -122,7 +122,7 @@ def extract_and_write_json(db_file, json_file, csv_file=CSV_FILE, rename_files=F
                     'video_length_seconds': item.get('video_length_seconds'),
                     'primary_shot_type': item.get('primary_shot_type'),
                     'tags': json.dumps(item.get('tags', []), ensure_ascii=False),
-                    'segments': json.dumps(item.get('segments', []), ensure_ascii=False) if item.get('segments') else '',
+                    'segments': json.dumps(item.get('segments')) if item.get('segments') else '',
                 })
 
         print(f"\nWrote {len(extracted)} records to {json_file} and {csv_file}")

@@ -343,7 +343,7 @@ def run_resolve_script():
                 # Set marks for this segment on the media pool item
                 # Note: Each AppendToTimeline call will use the current mark in/out
                 # This allows the same media pool item to be added multiple times with different segments
-                media_pool_item.SetMarkInOut(in_frame, out_frame, type=all)
+                media_pool_item.SetMarkInOut(in_frame, out_frame)
                 
                 # Append to timeline with current marks
                 # The clip will be added to the timeline with the marks we just set
@@ -370,7 +370,7 @@ def run_resolve_script():
 
             # Set Clip Properties and append to timeline
             media_pool_item.SetClipProperty("Clip Name", short_name)
-            media_pool_item.SetMarkInOut(in_frame, out_frame, type=all)
+            media_pool_item.SetMarkInOut(in_frame, out_frame)
             result = media_pool.AppendToTimeline(media_pool_item)
             if result:
                 print(f'Appending to timeline: Success')
