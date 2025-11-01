@@ -102,7 +102,9 @@ class TestGetVideoThumbnail:
     
     def test_get_video_thumbnail_valid_video(self, sample_video):
         """Test extracting a thumbnail from a valid video."""
-        thumbnail_frame = 1  # Request frame 1 (safer for 3-second video at 30fps)
+        # Request frame 1 at 1.0 fps - this translates to frame 30 of the video (1 * 30fps / 1.0fps)
+        # which is well within the 90 frames (3 seconds) of our sample video
+        thumbnail_frame = 1
         thumbnail_base64 = get_video_thumbnail(sample_video, thumbnail_frame, thumbnail_frame_fps=1.0)
         
         # Should return a base64 string
