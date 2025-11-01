@@ -385,6 +385,20 @@ def list_scripts():
     return jsonify({'scripts': scripts})
 
 
+@app.route('/api/project-info', methods=['GET'])
+def get_project_info():
+    """
+    Return project information for DaVinci Resolve integration.
+    This endpoint allows davinci_clip_importer.py to discover the project path.
+    """
+    return jsonify({
+        'project_path': str(PROJECT_ROOT),
+        'database_file': DATABASE,
+        'working_directory': executor.working_directory if executor else os.getcwd(),
+        'version': '0.1.0'
+    })
+
+
 def get_script_description(script_path):
     """Extract description from script comments."""
     try:

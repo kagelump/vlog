@@ -338,3 +338,41 @@ class TestContentTypes:
             json={'filename': 'test1.mp4', 'keep': 1}
         )
         assert 'application/json' in response.content_type
+
+
+class TestProjectInfoAPI:
+    """Tests for the project-info API endpoint."""
+    
+    def test_project_info_endpoint_exists(self, client):
+        """Test that project-info endpoint exists and returns 200."""
+        response = client.get('/api/project-info')
+        assert response.status_code == 200
+    
+    def test_project_info_returns_json(self, client):
+        """Test that project-info returns JSON content."""
+        response = client.get('/api/project-info')
+        assert 'application/json' in response.content_type
+        data = response.get_json()
+        assert data is not None
+    
+    def test_project_info_has_required_fields(self, client):
+        """Test that project-info returns required fields."""
+        response = client.get('/api/project-info')
+        data = response.get_json()
+        
+        assert 'project_path' in data
+        assert 'database_file' in data
+        assert 'working_directory' in data
+        assert 'version' in data
+    
+    def test_project_info_project_path_is_valid(self, client):
+        """Test that project_path is a valid path."""
+        response = client.get('/api/project-info')
+        data = response.get_json()
+        
+        project_path = data['project_path']
+        assert project_path is not None
+        assert len(project_path) > 0
+        # Should be an absolute path
+        assert os.path.isabs(project_path) or project_path.startswith('/')
+
