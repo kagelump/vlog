@@ -40,11 +40,15 @@ vlog/
 
 ### UI Launcher (Recommended)
 
-The easiest way to use vlog is through the integrated web UI launcher:
+The easiest way to use vlog is through the integrated web UI launcher (recommended):
 
 ```bash
+# Preferred: run inside the uv-managed venv as a module so imports are resolved
 cd /path/to/vlog
-PYTHONPATH=src python3 src/vlog/web_integrated.py
+uv run -- python -m vlog.web_integrated
+
+# Or use the convenience script that wraps the uv command (supports --port, --detached):
+./scripts/launch_web.sh --port 5432
 ```
 
 Then open your browser to http://localhost:5432
