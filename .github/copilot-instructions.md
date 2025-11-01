@@ -76,20 +76,25 @@ This is a video logging and analysis application that uses machine learning (MLX
 - Use appropriate frame rate calculations for thumbnail extraction
 
 ### Database Schema
-The main table stores:
-- `filename`: Video filename
-- `description`: AI-generated description
-- `short_name`: Snake_case short name
+The main table (`results`) stores:
+- `filename`: Video filename (PRIMARY KEY)
+- `video_description_long`: AI-generated long description
+- `video_description_short`: AI-generated short description
 - `primary_shot_type`: pov, insert, or establishing
-- `tags`: Comma-separated list (static, dynamic, closeup, medium, wide)
-- `thumbnail_frame`: Frame number for thumbnail
-- `rating`: Quality rating (0.0 to 1.0)
-- `camera_movement`: still, panning, moving forward, or random
-- `video_length`: Duration in seconds
-- `video_timestamp`: ISO format timestamp
+- `tags`: JSON-encoded list (static, dynamic, closeup, medium, wide)
+- `last_updated`: ISO format timestamp of last modification
+- `classification_time_seconds`: Time taken for AI classification
+- `classification_model`: Name of the model used
+- `video_length_seconds`: Duration in seconds
+- `video_timestamp`: ISO format timestamp of video file
 - `video_thumbnail_base64`: Base64-encoded JPEG thumbnail
-- `keep`: Boolean flag for user selection
+- `in_timestamp`: Start timestamp for clip trimming (format: "HH:MM:SS.sss")
+- `out_timestamp`: End timestamp for clip trimming (format: "HH:MM:SS.sss")
+- `rating`: Quality rating (0.0 to 1.0)
+- `keep`: Boolean flag for user selection (1=keep, 0=discard)
 - `clip_cut_duration`: Optional duration for trimming
+
+Note: Tags are stored as JSON strings in the database but returned as Python lists in API responses.
 
 ### API Endpoints
 - Follow RESTful conventions
@@ -99,7 +104,7 @@ The main table stores:
 - Separate data retrieval (GET) from modification (POST)
 
 ### MLX-VLM Integration
-- Use the default prompt defined in `DEAFULT_PROMPT` for consistency
+- Use the default prompt defined in `DEFAULT_PROMPT` for consistency
 - Parse JSON responses from the model
 - Handle cases where model output is malformed
 - Use the `third_party/mlx-vlm` submodule for model code
