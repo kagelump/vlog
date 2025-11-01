@@ -53,7 +53,16 @@ class ScriptExecutor:
         if not script_name or '/' in script_name or '\\' in script_name or '..' in script_name:
             return False, "Invalid script name"
         
-        script_path = PROJECT_ROOT / "scripts" / script_name
+        # Construct script path and ensure it's within the scripts directory
+        script_path = (PROJECT_ROOT / "scripts" / script_name).resolve()
+        scripts_dir = (PROJECT_ROOT / "scripts").resolve()
+        
+        # Verify the resolved path is actually within the scripts directory
+        try:
+            script_path.relative_to(scripts_dir)
+        except ValueError:
+            return False, "Invalid script path"
+        
         if not script_path.exists() or not script_path.is_file():
             return False, f"Script {script_name} not found"
         
