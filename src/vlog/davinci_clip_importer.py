@@ -19,13 +19,11 @@ import re
 import sys
 
 # --- Configuration ---
-# Try to find vlog project path from environment variable
-VLOG_PROJECT_PATH = os.environ.get("VLOG_PROJECT_PATH")
-
-# Configuration defaults (can be overridden by environment variables)
-DB_FILE = os.environ.get("VLOG_DB_FILE", "video_results.db")
-JSON_FILE = os.environ.get("VLOG_JSON_FILE", "extracted_clips.json")
-AUTO_EXTRACT = os.environ.get("VLOG_AUTO_EXTRACT", "0") == "1"
+# Configuration is read from environment variables at runtime:
+# - VLOG_PROJECT_PATH: Path to vlog project directory (required)
+# - VLOG_DB_FILE: Database filename (default: video_results.db)
+# - VLOG_JSON_FILE: JSON output filename (default: extracted_clips.json)
+# - VLOG_AUTO_EXTRACT: Set to "1" to auto-generate JSON from database (default: 0)
 
 PROJECT_NAME = "Automated Timeline Setup"
 PROJECT_FPS = 60.0  # Set this to your project's frame rate (e.g., 24.0, 25.0, 29.97, 30.0)

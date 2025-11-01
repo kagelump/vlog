@@ -76,6 +76,25 @@ cd /path/to/vlog
 PYTHONPATH=src python3 src/vlog/web.py
 ```
 
+## DaVinci Resolve Integration
+
+vlog includes integration with DaVinci Resolve to automatically import classified video clips with proper in/out points and metadata. See the [DaVinci Integration Guide](docs/DAVINCI_INTEGRATION.md) for detailed setup and usage instructions.
+
+Quick start:
+```bash
+# 1. Setup configuration
+./scripts/setup_davinci_config.sh
+
+# 2. Classify your videos
+cd /path/to/videos
+/path/to/vlog/scripts/ingest.sh
+
+# 3. Copy importer to DaVinci Resolve
+cp src/vlog/davinci_clip_importer.py "$HOME/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/"
+
+# 4. Run from DaVinci Console
+```
+
 
 ## Dependency management with `uv`
 
