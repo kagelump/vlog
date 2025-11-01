@@ -315,28 +315,65 @@ def run_resolve_script():
         sorted_clips.append(media_pool_item)
         print('media path: ', full_path)
         print('media_pool_item: ', media_pool_item)
-        in_ts = clip_data["in_timestamp"]
-        out_ts = clip_data["out_timestamp"]
-        short_name = clip_data["video_description_short"]
+        
+        # Check if we have multiple segments
+        segments = clip_data.get("segments")
+        if segments and len(segments) > 0:
+            # Use segments array for multiple in/out points
+            print(f"Clip has {len(segments)} segment(s)")
+            for idx, segment in enumerate(segments):
+                in_ts = segment["in_timestamp"]
+                out_ts = segment["out_timestamp"]
+                short_name = clip_data["video_description_short"]
+                
+                # If multiple segments, append segment number to name
+                if len(segments) > 1:
+                    segment_name = f"{short_name}_seg{idx+1}"
+                else:
+                    segment_name = short_name
+                
+                # Convert timestamps to frames
+                in_frame = timestamp_to_frames(in_ts, PROJECT_FPS)
+                out_frame = timestamp_to_frames(out_ts, PROJECT_FPS)
 
-        # Convert timestamps to frames
-        in_frame = timestamp_to_frames(in_ts, PROJECT_FPS)
-        out_frame = timestamp_to_frames(out_ts, PROJECT_FPS)
+                if in_frame == -1 or out_frame == -1:
+                    print(f"Skipping segment {idx+1} of '{short_name}' due to timestamp conversion error.")
+                    continue
 
-        if in_frame == -1 or out_frame == -1:
-            print(f"Skipping '{short_name}' due to timestamp conversion error.")
-            continue
+                # Set Clip Properties (Resolve requires frame numbers as strings)
+                print(media_pool_item.GetName())
+                print(media_pool_item.GetMarkInOut())
+                print(media_pool_item.GetClipProperty())
+                media_pool_item.SetClipProperty("Clip Name", segment_name)
+                media_pool_item.SetMarkInOut(in_frame, out_frame, type=all)
+                print('Appending to timeline: ', media_pool.AppendToTimeline(media_pool_item))
+                processed_count += 1
 
-        # Set Clip Properties (Resolve requires frame numbers as strings)
-        print(media_pool_item.GetName())
-        print(media_pool_item.GetMarkInOut())
-        print(media_pool_item.GetClipProperty())
-        media_pool_item.SetClipProperty("Clip Name", short_name)
-        media_pool_item.SetMarkInOut(in_frame, out_frame, type=all)
-        print('Appending to timeline: ', media_pool.AppendToTimeline(media_pool_item))
-        processed_count += 1
+                print(f"-> Set: '{segment_name}' | In: {in_ts} | Out: {out_ts}")
+        else:
+            # Fall back to single in_timestamp/out_timestamp for backwards compatibility
+            in_ts = clip_data["in_timestamp"]
+            out_ts = clip_data["out_timestamp"]
+            short_name = clip_data["video_description_short"]
 
-        print(f"-> Set: '{short_name}' | In: {in_ts} | Out: {out_ts}")
+            # Convert timestamps to frames
+            in_frame = timestamp_to_frames(in_ts, PROJECT_FPS)
+            out_frame = timestamp_to_frames(out_ts, PROJECT_FPS)
+
+            if in_frame == -1 or out_frame == -1:
+                print(f"Skipping '{short_name}' due to timestamp conversion error.")
+                continue
+
+            # Set Clip Properties (Resolve requires frame numbers as strings)
+            print(media_pool_item.GetName())
+            print(media_pool_item.GetMarkInOut())
+            print(media_pool_item.GetClipProperty())
+            media_pool_item.SetClipProperty("Clip Name", short_name)
+            media_pool_item.SetMarkInOut(in_frame, out_frame, type=all)
+            print('Appending to timeline: ', media_pool.AppendToTimeline(media_pool_item))
+            processed_count += 1
+
+            print(f"-> Set: '{short_name}' | In: {in_ts} | Out: {out_ts}")
 
 
     print(f"\n--- Script Complete ---")

@@ -28,7 +28,7 @@ def extract_and_write_json(db_file, json_file, csv_file=CSV_FILE, rename_files=F
 
         cursor.execute('''
             SELECT filename, video_description_short, in_timestamp, out_timestamp,
-                   video_description_long, video_length_seconds, primary_shot_type, tags
+                   video_description_long, video_length_seconds, primary_shot_type, tags, segments
             FROM results
         ''')
 
@@ -51,6 +51,14 @@ def extract_and_write_json(db_file, json_file, csv_file=CSV_FILE, rename_files=F
                 except Exception:
                     tags = [str(tags_raw)]
 
+            segments_raw = rd.get('segments')
+            segments = None
+            if segments_raw:
+                try:
+                    segments = json.loads(segments_raw)
+                except Exception:
+                    segments = None
+
             primary = rd.get('primary_shot_type')
 
             out = {
@@ -62,6 +70,7 @@ def extract_and_write_json(db_file, json_file, csv_file=CSV_FILE, rename_files=F
                 'video_length_seconds': rd.get('video_length_seconds'),
                 'primary_shot_type': primary,
                 'tags': tags,
+                'segments': segments,
             }
 
             if rename_files and full_path.exists():
@@ -98,7 +107,7 @@ def extract_and_write_json(db_file, json_file, csv_file=CSV_FILE, rename_files=F
         # write csv
         fieldnames = [
             'full_filepath', 'video_description_short', 'video_description_long',
-            'in_timestamp', 'out_timestamp', 'video_length_seconds', 'primary_shot_type', 'tags'
+            'in_timestamp', 'out_timestamp', 'video_length_seconds', 'primary_shot_type', 'tags', 'segments'
         ]
         with open(csv_file, 'w', newline='', encoding='utf-8') as cf:
             writer = csv.DictWriter(cf, fieldnames=fieldnames)
@@ -113,6 +122,7 @@ def extract_and_write_json(db_file, json_file, csv_file=CSV_FILE, rename_files=F
                     'video_length_seconds': item.get('video_length_seconds'),
                     'primary_shot_type': item.get('primary_shot_type'),
                     'tags': json.dumps(item.get('tags', []), ensure_ascii=False),
+                    'segments': json.dumps(item.get('segments', []), ensure_ascii=False) if item.get('segments') else '',
                 })
 
         print(f"\nWrote {len(extracted)} records to {json_file} and {csv_file}")

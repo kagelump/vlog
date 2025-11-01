@@ -68,7 +68,7 @@ class TestInitializeDb:
             'primary_shot_type', 'tags', 'last_updated', 'classification_time_seconds',
             'classification_model', 'video_length_seconds', 'video_timestamp',
             'video_thumbnail_base64', 'clip_cut_duration', 'keep',
-            'in_timestamp', 'out_timestamp', 'rating'
+            'in_timestamp', 'out_timestamp', 'rating', 'segments'
         }
         
         assert columns == expected_columns
@@ -344,5 +344,84 @@ class TestInsertResult:
         result = cursor.fetchone()
         
         assert result['keep'] == 1
+        
+        conn.close()
+    
+    def test_insert_result_with_segments(self, use_temp_db):
+        """Test inserting a result with multiple segments."""
+        segments = [
+            {"in_timestamp": "00:00:01.000", "out_timestamp": "00:00:05.000"},
+            {"in_timestamp": "00:00:10.000", "out_timestamp": "00:00:15.000"}
+        ]
+        
+        insert_result(
+            filename="multi_segment.mp4",
+            video_description_long="A video with multiple segments",
+            video_description_short="multi_seg",
+            primary_shot_type="establishing",
+            tags=["dynamic"],
+            classification_time_seconds=2.0,
+            classification_model="test-model",
+            video_length_seconds=20.0,
+            video_timestamp="2024-01-01T00:00:00",
+            video_thumbnail_base64="thumb",
+            in_timestamp="00:00:01.000",
+            out_timestamp="00:00:05.000",
+            rating=0.8,
+            segments=segments
+        )
+        
+        conn = get_conn(use_temp_db)
+        cursor = conn.cursor()
+        cursor.execute("SELECT segments FROM results WHERE filename = ?", ("multi_segment.mp4",))
+        result = cursor.fetchone()
+        
+        # Verify segments are stored as JSON
+        stored_segments = json.loads(result['segments'])
+        assert len(stored_segments) == 2
+        assert stored_segments[0]['in_timestamp'] == "00:00:01.000"
+        assert stored_segments[0]['out_timestamp'] == "00:00:05.000"
+        assert stored_segments[1]['in_timestamp'] == "00:00:10.000"
+        assert stored_segments[1]['out_timestamp'] == "00:00:15.000"
+        
+        conn.close()
+
+
+class TestGetAllMetadataWithSegments:
+    """Tests for get_all_metadata with segments field."""
+    
+    def test_get_all_metadata_with_segments(self, use_temp_db):
+        """Test that segments are properly parsed from JSON in metadata."""
+        segments = [
+            {"in_timestamp": "00:00:02.000", "out_timestamp": "00:00:08.000"},
+            {"in_timestamp": "00:00:12.000", "out_timestamp": "00:00:18.000"}
+        ]
+        
+        insert_result(
+            filename="seg_test.mp4",
+            video_description_long="desc",
+            video_description_short="short",
+            primary_shot_type="pov",
+            tags=["static"],
+            classification_time_seconds=1.0,
+            classification_model="model",
+            video_length_seconds=20.0,
+            video_timestamp="2024-01-01T00:00:00",
+            video_thumbnail_base64="thumb",
+            in_timestamp="00:00:02.000",
+            out_timestamp="00:00:08.000",
+            rating=0.7,
+            segments=segments
+        )
+        
+        conn = get_conn(use_temp_db)
+        metadata = get_all_metadata(conn)
+        
+        assert len(metadata) == 1
+        assert metadata[0]['filename'] == 'seg_test.mp4'
+        assert isinstance(metadata[0]['segments'], list)
+        assert len(metadata[0]['segments']) == 2
+        assert metadata[0]['segments'][0]['in_timestamp'] == "00:00:02.000"
+        assert metadata[0]['segments'][1]['out_timestamp'] == "00:00:18.000"
         
         conn.close()

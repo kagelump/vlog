@@ -23,8 +23,11 @@ The thumbnail should have good visual quality, focused subject, and/or represent
 Give a rating of the quality of the clip from 0.0 for poor quality to 1.0 for great quality.
 
 Classify the camera movement as still, panning, moving forward, or random.
-Provide the in and out timestamps for the best segment of the clip to keep.  
+
+Identify the best segment(s) of the clip to keep. For each segment, provide the in and out timestamps.
 Try to cut out any unneeded parts at the start (eg reframing) or end.
+If the clip is very long or has multiple distinct good segments, you can specify multiple segments.
+Each segment should be a continuous portion worth keeping.
 
 Use JSON as output, using the following keys:
 
@@ -35,5 +38,8 @@ Use JSON as output, using the following keys:
     * 'thumbnail_frame' (int)
     * 'rating' (float)
     * 'camera_movement' (str)
-    * 'in_timestamp' (str "HH:MM:SS.sss")
-    * 'out_timestamp' (str "HH:MM:SS.sss")
+    * 'segments' (list of objects with 'in_timestamp' (str "HH:MM:SS.sss") and 'out_timestamp' (str "HH:MM:SS.sss"))
+
+For backwards compatibility, also include these (they should match the first segment):
+    * 'in_timestamp' (str "HH:MM:SS.sss") - same as segments[0].in_timestamp
+    * 'out_timestamp' (str "HH:MM:SS.sss") - same as segments[0].out_timestamp

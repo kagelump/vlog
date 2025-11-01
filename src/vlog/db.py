@@ -43,7 +43,8 @@ def initialize_db(db_path=DATABASE):
                 keep INTEGER DEFAULT 1,
                 in_timestamp TEXT,
                 out_timestamp TEXT,
-                rating REAL
+                rating REAL,
+                segments TEXT
             )
         ''')
         conn.commit()
@@ -66,7 +67,7 @@ def get_all_metadata(conn):
         "filename", "video_description_long", "video_description_short", 
         "primary_shot_type", "tags", "last_updated", "classification_time_seconds", 
         "classification_model", "video_length_seconds", "video_timestamp", 
-        "clip_cut_duration", "keep", "in_timestamp", "out_timestamp", "rating"
+        "clip_cut_duration", "keep", "in_timestamp", "out_timestamp", "rating", "segments"
     ]
     query = f"SELECT {', '.join(columns)} FROM results"
     
@@ -85,6 +86,18 @@ def get_all_metadata(conn):
                 d['tags'] = []
         else:
             d['tags'] = []
+        
+        # Normalize segments: stored as JSON string in DB, return as list of dicts
+        segments_val = d.get('segments') if 'segments' in d else None
+        if segments_val:
+            try:
+                d['segments'] = json.loads(segments_val)
+            except Exception:
+                # If parsing fails, fallback to None
+                d['segments'] = None
+        else:
+            d['segments'] = None
+        
         parsed.append(d)
 
     return parsed
@@ -156,9 +169,12 @@ def check_if_file_exists(filename: str) -> bool:
 def insert_result(filename, video_description_long, video_description_short, 
                   primary_shot_type, tags, classification_time_seconds, classification_model, 
                   video_length_seconds, video_timestamp, video_thumbnail_base64, 
-                  in_timestamp, out_timestamp, rating):
+                  in_timestamp, out_timestamp, rating, segments=None):
     """
     Inserts a new result into the database.
+    
+    :param segments: Optional list of segment dicts with 'in_timestamp' and 'out_timestamp' keys.
+                     If provided, this takes precedence over in_timestamp/out_timestamp params.
     """
     conn = get_conn()
     try:
@@ -169,13 +185,13 @@ def insert_result(filename, video_description_long, video_description_short,
                 filename, video_description_long, video_description_short, primary_shot_type, tags, 
                 last_updated, classification_time_seconds, classification_model, 
                 video_length_seconds, video_timestamp, video_thumbnail_base64,
-                in_timestamp, out_timestamp, rating
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                in_timestamp, out_timestamp, rating, segments
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             filename, video_description_long, video_description_short, primary_shot_type, json.dumps(tags or []), 
             current_time, classification_time_seconds, classification_model, 
             video_length_seconds, video_timestamp, video_thumbnail_base64,
-            in_timestamp, out_timestamp, rating
+            in_timestamp, out_timestamp, rating, json.dumps(segments) if segments else None
         ))
         conn.commit()
     finally:

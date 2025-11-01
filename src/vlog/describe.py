@@ -142,6 +142,11 @@ def render_prompt(template_text: str, subtitle: str | None) -> str:
     return rendered
 
 
+class Segment(BaseModel):
+    in_timestamp: str
+    out_timestamp: str
+
+
 class DescribeOutput(BaseModel):
     description: str
     short_name: str
@@ -152,6 +157,7 @@ class DescribeOutput(BaseModel):
     camera_movement: str
     in_timestamp: str
     out_timestamp: str
+    segments: list[Segment] | None = None
 
 
 def validate_model_output(parsed: Any) -> dict:
@@ -225,7 +231,8 @@ def describe_videos_in_dir(directory, model_name, prompt="Describe this video", 
             thumbnail_base64,
             desc.get('in_timestamp'),
             desc.get('out_timestamp'),
-            desc.get('rating', 0.0)
+            desc.get('rating', 0.0),
+            desc.get('segments')
         )
     return results
 
