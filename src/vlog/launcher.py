@@ -29,11 +29,19 @@ class ScriptExecutor:
         if self.is_running:
             return False, "A script is already running"
         
+        # Validate script name to prevent path traversal
+        if not script_name or '/' in script_name or '\\' in script_name or '..' in script_name:
+            return False, "Invalid script name"
+        
         script_path = PROJECT_ROOT / "scripts" / script_name
-        if not script_path.exists():
+        if not script_path.exists() or not script_path.is_file():
             return False, f"Script {script_name} not found"
         
+        # Validate working directory to prevent path traversal
         if working_dir:
+            working_dir = os.path.abspath(working_dir)
+            if not os.path.isdir(working_dir):
+                return False, "Invalid working directory"
             self.working_directory = working_dir
         
         self.current_script = script_name
@@ -186,6 +194,9 @@ def create_launcher_app():
         if not working_dir:
             return jsonify({'success': False, 'message': 'Working directory is required'}), 400
         
+        # Validate and normalize the path
+        working_dir = os.path.abspath(working_dir)
+        
         if not os.path.isdir(working_dir):
             return jsonify({'success': False, 'message': 'Directory does not exist'}), 400
         
@@ -223,4 +234,7 @@ def create_launcher_app():
 
 if __name__ == '__main__':
     app = create_launcher_app()
-    app.run(debug=True, port=5433)
+    # Debug mode should be disabled in production
+    # Use environment variable to control debug mode
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode, port=5433)

@@ -38,11 +38,19 @@ class ScriptExecutor:
         if self.is_running:
             return False, "A script is already running"
         
+        # Validate script name to prevent path traversal
+        if not script_name or '/' in script_name or '\\' in script_name or '..' in script_name:
+            return False, "Invalid script name"
+        
         script_path = PROJECT_ROOT / "scripts" / script_name
-        if not script_path.exists():
+        if not script_path.exists() or not script_path.is_file():
             return False, f"Script {script_name} not found"
         
+        # Validate working directory to prevent path traversal
         if working_dir:
+            working_dir = os.path.abspath(working_dir)
+            if not os.path.isdir(working_dir):
+                return False, "Invalid working directory"
             self.working_directory = working_dir
         
         self.current_script = script_name
@@ -190,7 +198,8 @@ def get_metadata():
         metadata = get_all_metadata(conn) 
         return jsonify(metadata)
     except sqlite3.Error as e:
-        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
+        app.logger.error(f"Database error in get_metadata: {str(e)}")
+        return jsonify({"success": False, "message": "Database error occurred"}), 500
     
 @app.route('/api/thumbnail/<filename>', methods=['GET'])
 def get_thumbnail(filename):
@@ -207,7 +216,8 @@ def get_thumbnail(filename):
         return jsonify({'video_thumbnail_base64': None}), 404
         
     except sqlite3.Error as e:
-        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
+        app.logger.error(f"Database error in get_thumbnail: {str(e)}")
+        return jsonify({"success": False, "message": "Database error occurred"}), 500
 
 @app.route('/api/update_keep', methods=['POST'])
 def handle_update_keep_status():
@@ -224,7 +234,8 @@ def handle_update_keep_status():
         update_keep_status(conn, filename, keep_status)
         return jsonify({"success": True, "message": f"Keep status updated for {filename} to {keep_status}"})
     except sqlite3.Error as e:
-        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
+        app.logger.error(f"Database error in update_keep_status: {str(e)}")
+        return jsonify({"success": False, "message": "Database error occurred"}), 500
 
 @app.route('/api/update_duration', methods=['POST'])
 def handle_update_cut_duration():
@@ -241,7 +252,8 @@ def handle_update_cut_duration():
         update_cut_duration(conn, filename, duration)
         return jsonify({"success": True, "message": f"Cut duration updated for {filename} to {duration}"})
     except sqlite3.Error as e:
-        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
+        app.logger.error(f"Database error in update_cut_duration: {str(e)}")
+        return jsonify({"success": False, "message": "Database error occurred"}), 500
 
 # --- Routes: Launcher API ---
 
@@ -286,6 +298,9 @@ def set_working_dir():
     if not working_dir:
         return jsonify({'success': False, 'message': 'Working directory is required'}), 400
     
+    # Validate and normalize the path
+    working_dir = os.path.abspath(working_dir)
+    
     if not os.path.isdir(working_dir):
         return jsonify({'success': False, 'message': 'Directory does not exist'}), 400
     
@@ -321,4 +336,7 @@ def get_script_description(script_path):
 
 # --- Server Start ---
 if __name__ == '__main__':
-    app.run(debug=True, port=5432)
+    # Debug mode should be disabled in production
+    # Use environment variable to control debug mode
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode, port=5432)
