@@ -27,8 +27,9 @@ DATABASE = 'video_results.db'
 VIDEO_DIR = os.getcwd()
 STATIC_DIR = PROJECT_ROOT / 'static'
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging only if not already configured
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- Script Executor (for launcher functionality) ---
@@ -357,8 +358,8 @@ def get_script_description(script_path):
             for line in lines[:10]:  # Check first 10 lines
                 if line.startswith('#') and not line.startswith('#!'):
                     return line[1:].strip()
-    except Exception as e:
-        logger.error(f"Error reading script description: {str(e)}")
+    except (FileNotFoundError, PermissionError, UnicodeDecodeError) as e:
+        logger.error(f"Error reading script description from {script_path}: {str(e)}")
     return ''
 
 

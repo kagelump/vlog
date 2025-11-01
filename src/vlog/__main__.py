@@ -18,7 +18,10 @@ def main():
     
     # Import and run the app
     from vlog.web import app
-    app.run(debug=args.debug, port=args.port)
+    
+    # Determine debug mode - either from args or environment variable
+    debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode, port=args.port)
 
 
 if __name__ == '__main__':
