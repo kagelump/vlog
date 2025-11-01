@@ -1,14 +1,14 @@
 import os
 import json
 import time
-from db import check_if_file_exists, insert_result, initialize_db
+from vlog.db import check_if_file_exists, insert_result, initialize_db
 from mlx_vlm import load
 from mlx_vlm.video_generate import generate  # or the appropriate import
 from mlx_vlm.prompt_utils import apply_chat_template
 from mlx_vlm.utils import load_config
 from mlx_vlm.video_generate import process_vision_info
 import mlx.core as mx
-from video import get_video_length_and_timestamp, get_video_thumbnail
+from vlog.video import get_video_length_and_timestamp, get_video_thumbnail
 
 DEAFULT_PROMPT = """
 You are an expert film editor and cinematographer. 

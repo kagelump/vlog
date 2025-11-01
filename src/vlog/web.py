@@ -1,7 +1,7 @@
 import sqlite3
 from flask import Flask, jsonify, request, send_from_directory, g
 # Import all required functions from the dedicated database module
-from db import get_all_metadata, get_thumbnail_by_filename, \
+from vlog.db import get_all_metadata, get_thumbnail_by_filename, \
                update_keep_status, update_cut_duration
 import os
 
@@ -114,7 +114,7 @@ def handle_update_cut_duration():
 @app.route('/')
 def index():
     """Serves the main HTML page."""
-    return send_from_directory('.', 'index.html')
+    return send_from_directory('../static', 'index.html')
 
 
 # --- Server Start ---
