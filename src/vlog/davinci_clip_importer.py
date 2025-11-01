@@ -340,16 +340,20 @@ def run_resolve_script():
                     print(f"Skipping segment {idx+1} of '{short_name}' due to timestamp conversion error.")
                     continue
 
-                # Set Clip Properties (Resolve requires frame numbers as strings)
-                print(media_pool_item.GetName())
-                print(media_pool_item.GetMarkInOut())
-                print(media_pool_item.GetClipProperty())
-                media_pool_item.SetClipProperty("Clip Name", segment_name)
+                # Set marks for this segment on the media pool item
+                # Note: Each AppendToTimeline call will use the current mark in/out
+                # This allows the same media pool item to be added multiple times with different segments
                 media_pool_item.SetMarkInOut(in_frame, out_frame, type=all)
-                print('Appending to timeline: ', media_pool.AppendToTimeline(media_pool_item))
-                processed_count += 1
-
-                print(f"-> Set: '{segment_name}' | In: {in_ts} | Out: {out_ts}")
+                
+                # Append to timeline with current marks
+                # The clip will be added to the timeline with the marks we just set
+                result = media_pool.AppendToTimeline(media_pool_item)
+                if result:
+                    print(f'Appending segment to timeline: Success')
+                    processed_count += 1
+                    print(f"-> Added: '{segment_name}' | In: {in_ts} ({in_frame} frames) | Out: {out_ts} ({out_frame} frames)")
+                else:
+                    print(f'Appending segment to timeline: Failed')
         else:
             # Fall back to single in_timestamp/out_timestamp for backwards compatibility
             in_ts = clip_data["in_timestamp"]
@@ -364,20 +368,20 @@ def run_resolve_script():
                 print(f"Skipping '{short_name}' due to timestamp conversion error.")
                 continue
 
-            # Set Clip Properties (Resolve requires frame numbers as strings)
-            print(media_pool_item.GetName())
-            print(media_pool_item.GetMarkInOut())
-            print(media_pool_item.GetClipProperty())
+            # Set Clip Properties and append to timeline
             media_pool_item.SetClipProperty("Clip Name", short_name)
             media_pool_item.SetMarkInOut(in_frame, out_frame, type=all)
-            print('Appending to timeline: ', media_pool.AppendToTimeline(media_pool_item))
-            processed_count += 1
-
-            print(f"-> Set: '{short_name}' | In: {in_ts} | Out: {out_ts}")
+            result = media_pool.AppendToTimeline(media_pool_item)
+            if result:
+                print(f'Appending to timeline: Success')
+                processed_count += 1
+                print(f"-> Added: '{short_name}' | In: {in_ts} ({in_frame} frames) | Out: {out_ts} ({out_frame} frames)")
+            else:
+                print(f'Appending to timeline: Failed')
 
 
     print(f"\n--- Script Complete ---")
-    print(f"Total Clips Processed: {processed_count}")
+    print(f"Total Clips/Segments Processed: {processed_count}")
     print(f"Project '{PROJECT_NAME}' is ready in DaVinci Resolve.")
 
 if __name__ == "__main__":
