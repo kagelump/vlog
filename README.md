@@ -52,18 +52,128 @@ cd /path/to/vlog
 PYTHONPATH=src python3 src/vlog/web.py
 ```
 
-## Third-party submodules
 
-This repository includes an external dependency checked in as a git submodule at `third_party/mlx-vlm`.
+## Dependency management with `uv`
 
-If you clone this repository for the first time, initialize submodules with:
+This project recommends using `uv` (https://docs.astral.sh/uv) to manage Python versions, virtual environments and dependencies.
+
+Why `uv`?
+- Fast dependency resolution and caching
+- Easy Python version management and project-local virtualenvs (`.venv`)
+- Script-aware dependency handling (`uv add --script`) and a familiar pip-compatible interface
+
+Quickstart (macOS / zsh):
+
+1. Install `uv` (one of):
 
 ```bash
-git submodule update --init --recursive
+# via the installer (recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# or via pipx
+pipx install uv
 ```
 
-To update the submodule to the latest commit from its tracked remote:
+2. Initialize the project (optional) and pin Python:
 
 ```bash
-git submodule update --remote --merge --recursive
+cd /path/to/vlog
+uv init
+uv python pin 3.11
 ```
+
+3. Create the project venv and install runtime deps (example: Flask):
+
+```bash
+uv venv
+uv add flask
+```
+
+4. Install `mlx-vlm` into the uv-managed environment.
+	 You have two options:
+
+	 - Install the published package from PyPI:
+
+		 ```bash
+		 uv add mlx-vlm
+		 ```
+
+	 - Install directly from the GitHub repository (recommended if you want the latest or a branch):
+
+		 ```bash
+		 uv run -- python -m pip install git+https://github.com/Blaizzy/mlx-vlm.git
+		 ```
+
+	 - If you previously had a local copy in `third_party/mlx-vlm` and want to keep editing it,
+		 install it editable into the env:
+
+		 ```bash
+		 uv run -- python -m pip install -e third_party/mlx-vlm
+		 ```
+
+5. Lock and sync (optional, for reproducible installs):
+
+```bash
+uv lock
+uv sync
+```
+
+Running the app with `uv`:
+
+```bash
+# Run the Flask server
+uv run -- python web.py
+
+# Run the describe script
+uv run -- python src/vlog/describe.py /path/to/videos --model "mlx-community/Qwen3-VL-8B-Instruct-4bit"
+```
+
+CI / GitHub Actions snippet (minimal):
+
+```yaml
+- name: Install uv
+	run: pipx install uv
+
+- name: Create venv and install deps
+	run: |
+		uv python pin 3.11
+		uv venv
+		uv add --dev pytest
+		uv lock
+		uv sync
+
+- name: Run tests
+	run: uv run -- pytest -q
+```
+
+Notes:
+- Because this repo previously used a checked-in `mlx-vlm` copy as a submodule, you may still have a `third_party/mlx-vlm` directory locally. If you prefer editing that copy during development, install it editable into the uv venv (see step 4).
+- If you want me to remove the submodule entirely from git history and repository metadata, I can implement that (it requires git operations to fully unlink the submodule). For now the repo's workflow is switched to `uv`.
+
+## VS Code setup (recommended)
+
+If you use VS Code, point the editor to the uv-managed virtual environment so Pylance and the integrated terminal resolve dependencies installed by `uv`.
+
+1. Create the uv venv (if you haven't already):
+
+```bash
+uv python pin 3.11
+uv venv
+uv sync
+```
+
+2. Select the interpreter in VS Code: Command Palette → `Python: Select Interpreter` → choose `${workspaceFolder}/.venv/bin/python`.
+
+3. This repository includes a workspace settings file at `.vscode/settings.json` that sets the default interpreter and adds `src/` and `third_party/` to Pylance's `extraPaths` so imports like `from vlog.db import ...` resolve automatically.
+
+4. If you keep an editable local copy of `mlx-vlm` in `third_party/mlx-vlm`, install it into the venv so the editor and runtime see the same package:
+
+```bash
+uv run -- python -m pip install -e third_party/mlx-vlm
+```
+
+5. Restart VS Code (Developer: Reload Window) after changing the interpreter so Pylance reloads the environment.
+
+Notes:
+- The `.vscode/settings.json` file configures the integrated terminal's `PYTHONPATH` so quick ad-hoc runs in the terminal pick up `src/` without manual activation. You can edit or remove `third_party` from `extraPaths` if you prefer not to expose that directory to Pylance.
+- Do not commit the `.venv` directory. The `.gitignore` should already exclude it.
