@@ -4,12 +4,15 @@ from flask import Flask, jsonify, request, send_from_directory, g
 from vlog.db import get_all_metadata, get_thumbnail_by_filename, \
                update_keep_status, update_cut_duration
 import os
+from pathlib import Path
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'a_secure_random_key_here'
 DATABASE = 'video_results.db'
 VIDEO_DIR = os.getcwd()
+# Static directory path relative to this file's location
+STATIC_DIR = Path(__file__).parent.parent.parent / 'static'
 
 # --- Database Connection Helper (Required for Flask's context) ---
 
@@ -114,7 +117,7 @@ def handle_update_cut_duration():
 @app.route('/')
 def index():
     """Serves the main HTML page."""
-    return send_from_directory('../../static', 'index.html')
+    return send_from_directory(STATIC_DIR, 'index.html')
 
 
 # --- Server Start ---
