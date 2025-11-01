@@ -159,8 +159,9 @@ def validate_model_output(parsed: Any) -> dict:
 
     Returns the dictified model if valid, otherwise raises ValidationError.
     """
-    obj = DescribeOutput.parse_obj(parsed)
-    return obj.dict()
+    # Use Pydantic v2 API (model_validate + model_dump) for forward compatibility
+    obj = DescribeOutput.model_validate(parsed)
+    return obj.model_dump()
 
 
 def describe_videos_in_dir(directory, model_name, prompt="Describe this video", fps=1.0, **generate_kwargs):
