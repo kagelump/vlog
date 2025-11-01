@@ -14,3 +14,26 @@ Using [this model](https://huggingface.co/mlx-community/Qwen3-VL-4B-Instruct-8bi
 ```
 mlx_vlm.video_generate --model mlx-community/Qwen3-VL-4B-Instruct-8bit --max-tokens 100 --prompt "Describe this video" --video path/to/video.mp4 --max-pixels 224 224 --fps 1.0
 ```
+## Third-party submodules
+
+This repository includes an external dependency checked in as a git submodule at `third_party/mlx-vlm`.
+
+If you clone this repository for the first time, initialize submodules with:
+
+```bash
+git submodule update --init --recursive
+```
+
+To update the submodule to the latest commit from its tracked remote:
+
+```bash
+git submodule update --remote --merge --recursive
+# or enter the submodule and use normal git commands
+cd third_party/mlx-vlm
+git fetch origin
+git checkout main
+git pull
+cd ../..
+```
+
+If you prefer not to use submodules, you can copy the upstream code into `third_party/mlx-vlm` manually or use `git subtree` instead.
