@@ -38,14 +38,34 @@ vlog/
 
 ## Usage
 
-To run the ingestion pipeline:
+### UI Launcher (Recommended)
+
+The easiest way to use vlog is through the integrated web UI launcher:
+
+```bash
+cd /path/to/vlog
+PYTHONPATH=src python3 src/vlog/web_integrated.py
+```
+
+Then open your browser to http://localhost:5432
+
+The launcher provides:
+- Point-and-click script execution
+- Real-time progress tracking and console output
+- Working directory configuration
+- Model and FPS settings
+- Easy navigation to classification results
+
+### Command Line Usage
+
+To run the ingestion pipeline directly:
 
 ```bash
 cd /path/to/video/directory
 /path/to/vlog/scripts/ingest.sh
 ```
 
-To start the web server:
+To start the original web server (results viewer only):
 
 ```bash
 cd /path/to/vlog

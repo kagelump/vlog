@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLog Workflow Launcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .console-output {
+            font-family: 'Courier New', monospace;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .console-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        .console-output::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+            border-radius: 4px;
+        }
+        .console-output::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-idle {
+            background-color: #6b7280;
+        }
+        .status-running {
+            background-color: #10b981;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .script-card {
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .script-card:hover {
+            border-color: #6366f1;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .script-card.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .script-card.disabled:hover {
+            border-color: transparent;
+            transform: none;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <div class="container mx-auto p-4 sm:p-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-indigo-700 mb-2">
+                VLog Workflow Launcher
+            </h1>
+            <p class="text-gray-600 text-lg">
+                Run video editing ingestion scripts with point-and-click simplicity
+            </p>
+        </header>
+
+        <!-- Status Bar -->
+        <div class="bg-white shadow-lg rounded-xl p-4 mb-6 flex items-center justify-between">
+            <div class="flex items-center">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span class="font-semibold text-gray-700 mr-4">Status:</span>
+                <span id="status-text" class="text-gray-600">Idle</span>
+            </div>
+            <div class="flex items-center text-sm text-gray-500">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                </svg>
+                <span id="working-dir" class="truncate max-w-md">Loading...</span>
+            </div>
+        </div>
+
+        <!-- Working Directory Configuration -->
+        <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Working Directory</h2>
+            <div class="flex gap-2">
+                <input 
+                    type="text" 
+                    id="working-dir-input" 
+                    placeholder="/path/to/video/directory"
+                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                <button 
+                    id="set-working-dir-btn"
+                    class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition">
+                    Set Directory
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 mt-2">
+                Set the directory where your video files are located. Scripts will run in this directory.
+            </p>
+        </div>
+
+        <!-- Script Configuration -->
+        <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Configuration</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Model</label>
+                    <input 
+                        type="text" 
+                        id="model-input" 
+                        value="mlx-community/Qwen3-VL-8B-Instruct-4bit"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">FPS (Frames per second)</label>
+                    <input 
+                        type="number" 
+                        id="fps-input" 
+                        value="1.0"
+                        step="0.1"
+                        min="0.1"
+                        max="30"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                </div>
+            </div>
+        </div>
+
+        <!-- Script Launcher -->
+        <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Available Scripts</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="scripts-container">
+                <!-- Scripts will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <!-- Console Output -->
+        <div class="bg-white shadow-lg rounded-xl p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Console Output</h2>
+                <div class="flex gap-2">
+                    <button 
+                        id="clear-console-btn"
+                        class="px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition">
+                        Clear
+                    </button>
+                    <button 
+                        id="stop-script-btn"
+                        class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                        Stop Script
+                    </button>
+                </div>
+            </div>
+            <div id="console-output" class="console-output"></div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="mt-6 text-center">
+            <a href="/results" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold">
+                View Classification Results →
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let lastTimestamp = 0;
+        let isRunning = false;
+        let pollInterval = null;
+
+        // DOM elements
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const workingDirDisplay = document.getElementById('working-dir');
+        const workingDirInput = document.getElementById('working-dir-input');
+        const setWorkingDirBtn = document.getElementById('set-working-dir-btn');
+        const modelInput = document.getElementById('model-input');
+        const fpsInput = document.getElementById('fps-input');
+        const scriptsContainer = document.getElementById('scripts-container');
+        const consoleOutput = document.getElementById('console-output');
+        const clearConsoleBtn = document.getElementById('clear-console-btn');
+        const stopScriptBtn = document.getElementById('stop-script-btn');
+
+        // Update status display
+        function updateStatus(status) {
+            isRunning = status.is_running;
+            
+            if (isRunning) {
+                statusIndicator.className = 'status-indicator status-running';
+                statusText.textContent = `Running: ${status.current_script}`;
+                stopScriptBtn.disabled = false;
+            } else {
+                statusIndicator.className = 'status-indicator status-idle';
+                statusText.textContent = 'Idle';
+                stopScriptBtn.disabled = true;
+            }
+            
+            workingDirDisplay.textContent = status.working_directory;
+            workingDirInput.value = status.working_directory;
+            
+            // Update script cards
+            updateScriptCards();
+        }
+
+        // Fetch and display status
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/launcher/status');
+                const status = await response.json();
+                updateStatus(status);
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+            }
+        }
+
+        // Fetch and display output
+        async function fetchOutput() {
+            try {
+                const response = await fetch(`/api/launcher/output?since=${lastTimestamp}`);
+                const data = await response.json();
+                
+                data.messages.forEach(msg => {
+                    if (msg.timestamp > lastTimestamp) {
+                        lastTimestamp = msg.timestamp;
+                        appendToConsole(msg);
+                    }
+                });
+                
+                // Auto-scroll to bottom
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            } catch (error) {
+                console.error('Failed to fetch output:', error);
+            }
+        }
+
+        // Append message to console
+        function appendToConsole(msg) {
+            const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
+            let line = '';
+            
+            if (msg.type === 'output') {
+                line = `[${timestamp}] ${msg.data}`;
+            } else if (msg.type === 'complete') {
+                line = `\n[${timestamp}] === Script completed with exit code ${msg.exit_code} ===\n`;
+            } else if (msg.type === 'error') {
+                line = `\n[${timestamp}] ERROR: ${msg.data}\n`;
+            }
+            
+            consoleOutput.textContent += line + '\n';
+        }
+
+        // Load available scripts
+        async function loadScripts() {
+            try {
+                const response = await fetch('/api/launcher/scripts');
+                const data = await response.json();
+                
+                scriptsContainer.innerHTML = '';
+                
+                data.scripts.forEach(script => {
+                    const card = createScriptCard(script);
+                    scriptsContainer.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Failed to load scripts:', error);
+                scriptsContainer.innerHTML = '<p class="text-red-500">Failed to load scripts</p>';
+            }
+        }
+
+        // Create script card element
+        function createScriptCard(script) {
+            const card = document.createElement('div');
+            card.className = 'script-card bg-gradient-to-br from-indigo-50 to-white p-6 rounded-lg shadow cursor-pointer';
+            card.dataset.scriptName = script.name;
+            
+            const title = document.createElement('h3');
+            title.className = 'text-lg font-bold text-gray-800 mb-2';
+            title.textContent = script.name.replace('.sh', '');
+            
+            const description = document.createElement('p');
+            description.className = 'text-sm text-gray-600';
+            description.textContent = script.description || 'No description available';
+            
+            card.appendChild(title);
+            card.appendChild(description);
+            
+            card.addEventListener('click', () => runScript(script.name));
+            
+            return card;
+        }
+
+        // Update script cards (enable/disable based on running state)
+        function updateScriptCards() {
+            const cards = document.querySelectorAll('.script-card');
+            cards.forEach(card => {
+                if (isRunning) {
+                    card.classList.add('disabled');
+                } else {
+                    card.classList.remove('disabled');
+                }
+            });
+        }
+
+        // Run a script
+        async function runScript(scriptName) {
+            if (isRunning) {
+                alert('A script is already running. Please wait for it to complete or stop it first.');
+                return;
+            }
+            
+            const args = [];
+            
+            // Add model and fps arguments for describe script
+            if (scriptName === 'ingest.sh') {
+                const model = modelInput.value.trim();
+                const fps = fpsInput.value.trim();
+                
+                if (model) {
+                    args.push('--model', model);
+                }
+                if (fps) {
+                    args.push('--fps', fps);
+                }
+            }
+            
+            try {
+                consoleOutput.textContent += `\n=== Starting ${scriptName} ===\n\n`;
+                
+                const response = await fetch('/api/launcher/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        script: scriptName,
+                        args: args,
+                        working_dir: workingDirInput.value
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Start polling for output
+                    if (!pollInterval) {
+                        pollInterval = setInterval(() => {
+                            fetchOutput();
+                            fetchStatus();
+                        }, 500);
+                    }
+                } else {
+                    alert(`Failed to start script: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('Failed to run script:', error);
+                alert('Failed to run script. See console for details.');
+            }
+        }
+
+        // Stop currently running script
+        async function stopScript() {
+            try {
+                const response = await fetch('/api/launcher/stop', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    consoleOutput.textContent += `\n=== Script stopped by user ===\n\n`;
+                } else {
+                    alert(`Failed to stop script: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('Failed to stop script:', error);
+                alert('Failed to stop script. See console for details.');
+            }
+        }
+
+        // Set working directory
+        async function setWorkingDirectory() {
+            const workingDir = workingDirInput.value.trim();
+            
+            if (!workingDir) {
+                alert('Please enter a working directory');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/launcher/set-working-dir', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ working_dir: workingDir })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    consoleOutput.textContent += `\n[INFO] Working directory set to: ${workingDir}\n\n`;
+                    fetchStatus();
+                } else {
+                    alert(`Failed to set working directory: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('Failed to set working directory:', error);
+                alert('Failed to set working directory. See console for details.');
+            }
+        }
+
+        // Clear console
+        function clearConsole() {
+            consoleOutput.textContent = '';
+            lastTimestamp = 0;
+        }
+
+        // Event listeners
+        setWorkingDirBtn.addEventListener('click', setWorkingDirectory);
+        clearConsoleBtn.addEventListener('click', clearConsole);
+        stopScriptBtn.addEventListener('click', stopScript);
+
+        // Initialize
+        async function init() {
+            await fetchStatus();
+            await loadScripts();
+            
+            // Start polling
+            if (!pollInterval) {
+                pollInterval = setInterval(() => {
+                    fetchStatus();
+                    if (isRunning) {
+                        fetchOutput();
+                    }
+                }, 1000);
+            }
+        }
+
+        // Run initialization
+        init();
+    </script>
+</body>
+</html>
