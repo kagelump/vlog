@@ -1,0 +1,4 @@
+template: prompts/describe_v1.md
+model: "mlx-community/Qwen3-VL-8B-Instruct-4bit"
+temperature: 0.7
+version: "v1"
