@@ -9,6 +9,16 @@ The `davinci_clip_importer.py` script allows you to:
 - Automatically set in/out points based on vlog classifications
 - Apply clip names based on the short descriptions from vlog
 - Create a timeline with all clips in sorted order
+- **NEW:** Support for multiple segments per clip - if a clip has multiple good segments, each will be imported separately with appropriate naming
+
+### Multiple Segments Feature
+
+For very long clips, vlog's AI model can now identify multiple distinct segments worth keeping. For example:
+- A 10-minute recording might have two good 30-second segments (one at 1:00-1:30, another at 8:00-8:30)
+- Each segment will be imported to DaVinci as a separate clip instance: `clip_name_seg1`, `clip_name_seg2`, etc.
+- If only one segment is identified, the clip name remains unchanged (backwards compatible)
+
+This feature is automatically enabled in the model prompt and handled by the importer script - no configuration needed!
 
 ## Setup
 
@@ -238,6 +248,7 @@ export VLOG_JSON_FILE=/full/path/to/clips.json
 ## Notes
 
 - The script imports clips based on the `keep` flag in the database. Clips marked as "discard" are included.
-- Clip in/out points are set based on the `in_timestamp` and `out_timestamp` fields from vlog.
+- Clip in/out points are set based on the `segments` field from vlog (if available), or fall back to the single `in_timestamp` and `out_timestamp` fields for backwards compatibility.
+- **Multiple segments:** If a clip has multiple segments defined, each segment will be imported as a separate instance with `_seg1`, `_seg2`, etc. appended to the clip name.
 - Clips are added to the timeline in sorted order by filename.
 - The script uses the current DaVinci Resolve project; make sure you have a project open before running.
