@@ -214,7 +214,17 @@
             }
             
             workingDirDisplay.textContent = status.working_directory;
-            workingDirInput.value = status.working_directory;
+            // Only update the input if the user is not actively editing it.
+            // This prevents the periodic status poll from clobbering user edits.
+            try {
+                if (document.activeElement !== workingDirInput) {
+                    workingDirInput.value = status.working_directory;
+                }
+            } catch (e) {
+                // In very old browsers document.activeElement may behave unexpectedly;
+                // fall back to assigning the value to avoid breaking the UI.
+                workingDirInput.value = status.working_directory;
+            }
             
             // Update script cards
             updateScriptCards();
