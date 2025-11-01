@@ -80,6 +80,8 @@ PYTHONPATH=src python3 src/vlog/web.py
 
 vlog includes integration with DaVinci Resolve to automatically import classified video clips with proper in/out points and metadata. The script can automatically discover your vlog project via HTTP endpoint (if web server is running), config file, or environment variable. See the [DaVinci Integration Guide](docs/DAVINCI_INTEGRATION.md) for detailed setup and usage instructions.
 
+**New:** vlog now supports multiple in/out segments per clip! The AI model can identify multiple good segments in long videos, and each segment will be imported to DaVinci Resolve as a separate clip instance.
+
 Quick start (easiest method with web server):
 ```bash
 # 1. Classify your videos
