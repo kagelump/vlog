@@ -327,6 +327,7 @@ def run_resolve_script():
                 short_name = clip_data["video_description_short"]
                 
                 # If multiple segments, append segment number to name
+                # For single segments, keep the original name (no suffix needed)
                 if len(segments) > 1:
                     segment_name = f"{short_name}_seg{idx+1}"
                 else:
@@ -340,6 +341,10 @@ def run_resolve_script():
                     print(f"Skipping segment {idx+1} of '{short_name}' due to timestamp conversion error.")
                     continue
 
+                # Note: We could set the clip property name here, but when appending the same
+                # media pool item multiple times, they all share the source name. The timeline
+                # clips will use the source name. For differentiation, we print segment_name.
+                
                 # Set marks for this segment on the media pool item
                 # Note: Each AppendToTimeline call will use the current mark in/out
                 # This allows the same media pool item to be added multiple times with different segments

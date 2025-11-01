@@ -232,7 +232,7 @@ def describe_videos_in_dir(directory, model_name, prompt="Describe this video", 
             desc.get('in_timestamp'),
             desc.get('out_timestamp'),
             desc.get('rating', 0.0),
-            desc.get('segments')
+            desc.get('segments')  # Already validated by DescribeOutput pydantic model
         )
     return results
 
