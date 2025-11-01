@@ -12,6 +12,8 @@ The `davinci_clip_importer.py` script allows you to:
 
 ## Setup
 
+The `davinci_clip_importer.py` script can automatically discover your vlog project using one of four methods (tried in order):
+
 ### Option 1: Using the Setup Script (Recommended)
 
 Run the provided setup script to configure the integration:
@@ -39,6 +41,26 @@ Create a config file at `~/.vlog/config` or `~/.config/vlog/config` with the fol
 ```
 PROJECT_PATH=/path/to/your/vlog/project
 ```
+
+### Option 4: HTTP Endpoint (Easiest - No Configuration Required!)
+
+If you have the vlog web server running, the script will automatically discover the project path by querying the web server:
+
+```bash
+# Start the vlog web server (in your vlog project directory)
+cd /path/to/vlog
+python -m vlog.web
+# or
+./scripts/launch_web.sh
+```
+
+The script will automatically query `http://localhost:5432/api/project-info` to discover the project path. You can customize the URL using the `VLOG_WEB_URL` environment variable:
+
+```bash
+export VLOG_WEB_URL=http://localhost:8080
+```
+
+**Note:** This is the easiest method if you're already using the web UI to review your clips!
 
 ## Usage
 
@@ -87,7 +109,8 @@ Or use DaVinci Resolve's Script menu if available.
 
 The script supports several environment variables for configuration:
 
-- **VLOG_PROJECT_PATH** (required): Path to your vlog project directory
+- **VLOG_PROJECT_PATH** (optional): Path to your vlog project directory. If not set, will try other discovery methods.
+- **VLOG_WEB_URL** (optional): URL of vlog web server for HTTP discovery (default: `http://localhost:5432`)
 - **VLOG_DB_FILE** (optional): Database filename (default: `video_results.db`)
 - **VLOG_JSON_FILE** (optional): JSON output filename (default: `extracted_clips.json`)
 - **VLOG_AUTO_EXTRACT** (optional): Set to `1` to automatically extract clip data from database (default: `0`)
@@ -107,6 +130,27 @@ This is useful if you want to re-import clips after making changes in vlog's web
 Complete workflow from classification to DaVinci import:
 
 ```bash
+# 1. Classify your videos
+cd /path/to/your/videos
+/path/to/vlog/scripts/ingest.sh
+
+# 2. Review and edit classifications in vlog web UI
+cd /path/to/vlog
+./scripts/launch_web.sh
+# Open http://localhost:5432 and review/edit clips
+
+# 3. Copy importer to DaVinci (one-time)
+cp /path/to/vlog/src/vlog/davinci_clip_importer.py \
+   "$HOME/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/"
+
+# 4. Run in DaVinci Resolve (with web server still running)
+# Open DaVinci → Console → exec(open("davinci_clip_importer.py").read())
+# The script will automatically discover the project via HTTP!
+```
+
+**Alternative workflow without web server:**
+
+```bash
 # 1. Setup configuration (one-time)
 cd /path/to/vlog
 ./scripts/setup_davinci_config.sh
@@ -115,31 +159,31 @@ cd /path/to/vlog
 cd /path/to/your/videos
 /path/to/vlog/scripts/ingest.sh
 
-# 3. Review and edit classifications in vlog web UI
-cd /path/to/vlog
-./scripts/launch_web.sh
-# Open http://localhost:5432 and review/edit clips
-
-# 4. Extract clip data (optional if using auto-extract)
+# 3. Extract clip data
 cd /path/to/your/videos
 python /path/to/vlog/src/vlog/db_extract_v2.py
 
-# 5. Copy importer to DaVinci (one-time)
+# 4. Copy importer to DaVinci (one-time)
 cp /path/to/vlog/src/vlog/davinci_clip_importer.py \
    "$HOME/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/"
 
-# 6. Run in DaVinci Resolve
+# 5. Run in DaVinci Resolve
 # Open DaVinci → Console → exec(open("davinci_clip_importer.py").read())
 ```
 
 ## Troubleshooting
 
-### "VLOG_PROJECT_PATH not set" Error
+### "Could not locate vlog project!" Error
 
-Make sure you've either:
+The script tries multiple discovery methods in order:
+1. `VLOG_PROJECT_PATH` environment variable
+2. Config file at `~/.vlog/config` or `~/.config/vlog/config`
+3. HTTP endpoint at `http://localhost:5432` (or `VLOG_WEB_URL`)
+
+Make sure at least one method is configured:
 - Run `./scripts/setup_davinci_config.sh`, OR
 - Set the `VLOG_PROJECT_PATH` environment variable, OR
-- Created a config file at `~/.vlog/config`
+- Start the vlog web server with `python -m vlog.web`
 
 ### "Could not import vlog.db_extract_v2" Error
 

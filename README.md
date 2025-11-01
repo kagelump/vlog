@@ -78,21 +78,22 @@ PYTHONPATH=src python3 src/vlog/web.py
 
 ## DaVinci Resolve Integration
 
-vlog includes integration with DaVinci Resolve to automatically import classified video clips with proper in/out points and metadata. See the [DaVinci Integration Guide](docs/DAVINCI_INTEGRATION.md) for detailed setup and usage instructions.
+vlog includes integration with DaVinci Resolve to automatically import classified video clips with proper in/out points and metadata. The script can automatically discover your vlog project via HTTP endpoint (if web server is running), config file, or environment variable. See the [DaVinci Integration Guide](docs/DAVINCI_INTEGRATION.md) for detailed setup and usage instructions.
 
-Quick start:
+Quick start (easiest method with web server):
 ```bash
-# 1. Setup configuration
-./scripts/setup_davinci_config.sh
-
-# 2. Classify your videos
+# 1. Classify your videos
 cd /path/to/videos
 /path/to/vlog/scripts/ingest.sh
+
+# 2. Start vlog web server (for project discovery)
+cd /path/to/vlog
+./scripts/launch_web.sh
 
 # 3. Copy importer to DaVinci Resolve
 cp src/vlog/davinci_clip_importer.py "$HOME/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/"
 
-# 4. Run from DaVinci Console
+# 4. Run from DaVinci Console - it will auto-discover the project!
 ```
 
 

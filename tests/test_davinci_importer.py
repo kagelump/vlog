@@ -9,6 +9,8 @@ import tempfile
 import json
 import pytest
 from pathlib import Path
+from unittest.mock import patch, MagicMock
+from urllib.error import URLError
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -111,6 +113,122 @@ class TestSetupVlogImports:
                 os.environ['VLOG_PROJECT_PATH'] = old_path
             else:
                 os.environ.pop('VLOG_PROJECT_PATH', None)
+    
+    def test_setup_with_http_endpoint(self, tmp_path, monkeypatch):
+        """Test setup when vlog web server is available."""
+        # Create a mock vlog project structure
+        project_dir = tmp_path / "vlog_project"
+        src_dir = project_dir / "src"
+        src_dir.mkdir(parents=True)
+        
+        # Clear environment variable
+        old_path = os.environ.get('VLOG_PROJECT_PATH')
+        os.environ.pop('VLOG_PROJECT_PATH', None)
+        
+        # Mock expanduser to return non-existent paths (so config file method fails)
+        def mock_expanduser(path):
+            return "/nonexistent" + path[1:]
+        
+        monkeypatch.setattr(os.path, 'expanduser', mock_expanduser)
+        
+        # Mock urlopen to return project info
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = json.dumps({
+            'project_path': str(project_dir),
+            'database_file': 'video_results.db'
+        }).encode('utf-8')
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = lambda s, *args: None
+        
+        with patch('vlog.davinci_clip_importer.urlopen', return_value=mock_response):
+            try:
+                result = davinci_clip_importer.setup_vlog_imports()
+                assert result == str(project_dir)
+                assert str(src_dir) in sys.path
+            finally:
+                # Clean up
+                if old_path:
+                    os.environ['VLOG_PROJECT_PATH'] = old_path
+                if str(src_dir) in sys.path:
+                    sys.path.remove(str(src_dir))
+    
+    def test_setup_with_http_endpoint_failure(self, monkeypatch):
+        """Test setup when HTTP endpoint is not available."""
+        # Clear environment variable
+        old_path = os.environ.get('VLOG_PROJECT_PATH')
+        os.environ.pop('VLOG_PROJECT_PATH', None)
+        
+        # Mock expanduser to return non-existent paths
+        def mock_expanduser(path):
+            return "/nonexistent" + path[1:]
+        
+        monkeypatch.setattr(os.path, 'expanduser', mock_expanduser)
+        
+        # Mock urlopen to raise URLError
+        with patch('vlog.davinci_clip_importer.urlopen', side_effect=URLError('Connection refused')):
+            try:
+                result = davinci_clip_importer.setup_vlog_imports()
+                assert result is None
+            finally:
+                if old_path:
+                    os.environ['VLOG_PROJECT_PATH'] = old_path
+
+
+class TestQueryVlogWebserver:
+    """Test the query_vlog_webserver function."""
+    
+    def test_query_success(self, tmp_path):
+        """Test successful query to vlog web server."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        
+        # Mock urlopen to return project info
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = json.dumps({
+            'project_path': str(project_dir),
+            'database_file': 'video_results.db'
+        }).encode('utf-8')
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = lambda s, *args: None
+        
+        with patch('vlog.davinci_clip_importer.urlopen', return_value=mock_response):
+            result = davinci_clip_importer.query_vlog_webserver("http://localhost:5432")
+            assert result == str(project_dir)
+    
+    def test_query_connection_error(self):
+        """Test query when server is not available."""
+        with patch('vlog.davinci_clip_importer.urlopen', side_effect=URLError('Connection refused')):
+            result = davinci_clip_importer.query_vlog_webserver("http://localhost:5432")
+            assert result is None
+    
+    def test_query_invalid_json(self):
+        """Test query when server returns invalid JSON."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = b"invalid json"
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = lambda s, *args: None
+        
+        with patch('vlog.davinci_clip_importer.urlopen', return_value=mock_response):
+            result = davinci_clip_importer.query_vlog_webserver("http://localhost:5432")
+            assert result is None
+    
+    def test_query_nonexistent_path(self):
+        """Test query when server returns non-existent path."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = json.dumps({
+            'project_path': '/nonexistent/path',
+            'database_file': 'video_results.db'
+        }).encode('utf-8')
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = lambda s, *args: None
+        
+        with patch('vlog.davinci_clip_importer.urlopen', return_value=mock_response):
+            result = davinci_clip_importer.query_vlog_webserver("http://localhost:5432")
+            assert result is None
 
 
 class TestGetJsonPath:

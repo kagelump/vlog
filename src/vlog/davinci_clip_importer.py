@@ -2,13 +2,16 @@
 #
 # INSTRUCTIONS:
 # 1. Copy this file to DaVinci Resolve's script directory
-# 2. Set the VLOG_PROJECT_PATH environment variable to point to your vlog project directory
-#    Example: export VLOG_PROJECT_PATH=/path/to/vlog/project
+# 2. Configure the vlog project path using one of these methods:
+#    a) Set VLOG_PROJECT_PATH environment variable
+#    b) Create config file at ~/.vlog/config
+#    c) Run vlog web server (default: http://localhost:5432)
 # 3. IMPORTANT: Run this script from the DaVinci Resolve application's built-in Python console,
 #    or from an external Python environment configured to access the Resolve API.
 #
 # CONFIGURATION OPTIONS:
-# - VLOG_PROJECT_PATH: Environment variable pointing to vlog project directory (required)
+# - VLOG_PROJECT_PATH: Environment variable pointing to vlog project directory
+# - VLOG_WEB_URL: URL of vlog web server (default: http://localhost:5432)
 # - VLOG_DB_FILE: Optional override for database filename (default: video_results.db)
 # - VLOG_JSON_FILE: Optional override for JSON output filename (default: extracted_clips.json)
 # - VLOG_AUTO_EXTRACT: Set to "1" to auto-generate JSON from database (default: 0)
@@ -17,6 +20,8 @@ import json
 import os
 import re
 import sys
+from urllib.request import urlopen
+from urllib.error import URLError
 
 # --- Configuration ---
 # Configuration is read from environment variables at runtime:
@@ -29,16 +34,39 @@ PROJECT_NAME = "Automated Timeline Setup"
 PROJECT_FPS = 60.0  # Set this to your project's frame rate (e.g., 24.0, 25.0, 29.97, 30.0)
 # ---------------------
 
+def query_vlog_webserver(url="http://localhost:5432"):
+    """
+    Query the vlog web server for project information.
+    Returns project path if successful, None otherwise.
+    """
+    try:
+        api_url = f"{url}/api/project-info"
+        with urlopen(api_url, timeout=2) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                project_path = data.get('project_path')
+                if project_path and os.path.isdir(project_path):
+                    print(f"Found vlog project via web server at {url}")
+                    print(f"  Project path: {project_path}")
+                    return project_path
+    except (URLError, OSError, json.JSONDecodeError, KeyError) as e:
+        # Silently fail - this is just one discovery method
+        pass
+    return None
+
 def setup_vlog_imports():
     """
     Setup Python path to import vlog modules.
-    Looks for VLOG_PROJECT_PATH environment variable or attempts to find via config.
+    Tries multiple methods to locate the vlog project:
+    1. VLOG_PROJECT_PATH environment variable
+    2. Config file at ~/.vlog/config or ~/.config/vlog/config
+    3. HTTP endpoint (vlog web server at localhost:5432)
     Returns the project path if successful, None otherwise.
     """
-    # Read from environment variable at runtime
+    # Method 1: Read from environment variable
     project_path = os.environ.get("VLOG_PROJECT_PATH")
     
-    # Try to read from config file if environment variable not set
+    # Method 2: Try to read from config file if environment variable not set
     if not project_path:
         config_locations = [
             os.path.expanduser("~/.vlog/config"),
@@ -57,13 +85,22 @@ def setup_vlog_imports():
                 except Exception as e:
                     print(f"Warning: Could not read config file {config_file}: {e}")
     
+    # Method 3: Try to query vlog web server
     if not project_path:
-        print("ERROR: VLOG_PROJECT_PATH not set!")
-        print("Please set the VLOG_PROJECT_PATH environment variable to your vlog project directory.")
-        print("Example: export VLOG_PROJECT_PATH=/path/to/vlog/project")
+        web_url = os.environ.get("VLOG_WEB_URL", "http://localhost:5432")
+        project_path = query_vlog_webserver(web_url)
+    
+    if not project_path:
+        print("ERROR: Could not locate vlog project!")
+        print("Please use one of the following methods:")
+        print("  1. Set VLOG_PROJECT_PATH environment variable:")
+        print("     export VLOG_PROJECT_PATH=/path/to/vlog/project")
         print("")
-        print("Alternatively, create a config file at ~/.vlog/config with:")
-        print("PROJECT_PATH=/path/to/vlog/project")
+        print("  2. Create a config file at ~/.vlog/config with:")
+        print("     PROJECT_PATH=/path/to/vlog/project")
+        print("")
+        print("  3. Start the vlog web server (default port 5432):")
+        print("     cd /path/to/vlog && python -m vlog.web")
         return None
     
     if not os.path.isdir(project_path):
