@@ -76,7 +76,7 @@ This is a video logging and analysis application that uses machine learning (MLX
 - Use appropriate frame rate calculations for thumbnail extraction
 
 ### Database Schema
-The main table (`results`) stores:
+The main table (`results`) stores the following fields (in schema order):
 - `filename`: Video filename (PRIMARY KEY)
 - `video_description_long`: AI-generated long description
 - `video_description_short`: AI-generated short description
@@ -88,11 +88,11 @@ The main table (`results`) stores:
 - `video_length_seconds`: Duration in seconds
 - `video_timestamp`: ISO format timestamp of video file
 - `video_thumbnail_base64`: Base64-encoded JPEG thumbnail
+- `clip_cut_duration`: Optional duration for trimming
+- `keep`: Boolean flag for user selection (1=keep, 0=discard, default: 1)
 - `in_timestamp`: Start timestamp for clip trimming (format: "HH:MM:SS.sss")
 - `out_timestamp`: End timestamp for clip trimming (format: "HH:MM:SS.sss")
 - `rating`: Quality rating (0.0 to 1.0)
-- `keep`: Boolean flag for user selection (1=keep, 0=discard)
-- `clip_cut_duration`: Optional duration for trimming
 
 Note: Tags are stored as JSON strings in the database but returned as Python lists in API responses.
 
@@ -104,7 +104,7 @@ Note: Tags are stored as JSON strings in the database but returned as Python lis
 - Separate data retrieval (GET) from modification (POST)
 
 ### MLX-VLM Integration
-- Use the default prompt defined in `DEFAULT_PROMPT` for consistency
+- Use the default prompt defined in `DEAFULT_PROMPT` for consistency (note: this variable has a typo in describe.py)
 - Parse JSON responses from the model
 - Handle cases where model output is malformed
 - Use the `third_party/mlx-vlm` submodule for model code
