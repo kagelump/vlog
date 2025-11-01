@@ -8,3 +8,21 @@ dependencies = [
     "flask>=3.1.2",
     "mlx-vlm>=0.3.5",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--cov=src/vlog",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
