@@ -8,6 +8,7 @@ from mlx_vlm.prompt_utils import apply_chat_template
 from mlx_vlm.utils import load_config
 from mlx_vlm.video_generate import process_vision_info
 import mlx.core as mx
+from typing import Any, Sequence, Tuple, cast
 from vlog.video import get_video_length_and_timestamp, get_video_thumbnail
 
 DEAFULT_PROMPT = """
@@ -82,12 +83,16 @@ def describe_video(
     )
 
     # process vision info (videos etc) — convert to model-ready inputs
-    
-    image_inputs, video_inputs = process_vision_info(messages)
+    # upstream type hints for `process_vision_info` are unreliable. Cast the
+    # returned value to the types we actually expect so the editor/type-checker
+    # understands the real shapes without changing runtime behaviour.
+    _, video_inputs = cast(
+        Tuple[Sequence[Any], Sequence[Any]], process_vision_info(messages)
+    )
 
     inputs = processor(
         text=[text],
-        images=image_inputs,  # often empty for pure video
+        images=None,
         videos=video_inputs,
         padding=True,
         return_tensors="pt",
