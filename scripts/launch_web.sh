@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-CMD=(uv run -- python -m vlog.web_integrated)
+CMD=(uv run -- python -m vlog.web)
 
 if [ -n "$PORT" ]; then
   CMD+=(-- --port "$PORT")
