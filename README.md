@@ -28,12 +28,4 @@ To update the submodule to the latest commit from its tracked remote:
 
 ```bash
 git submodule update --remote --merge --recursive
-# or enter the submodule and use normal git commands
-cd third_party/mlx-vlm
-git fetch origin
-git checkout main
-git pull
-cd ../..
 ```
-
-If you prefer not to use submodules, you can copy the upstream code into `third_party/mlx-vlm` manually or use `git subtree` instead.
