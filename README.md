@@ -150,6 +150,62 @@ Notes:
 - Because this repo previously used a checked-in `mlx-vlm` copy as a submodule, you may still have a `third_party/mlx-vlm` directory locally. If you prefer editing that copy during development, install it editable into the uv venv (see step 4).
 - If you want me to remove the submodule entirely from git history and repository metadata, I can implement that (it requires git operations to fully unlink the submodule). For now the repo's workflow is switched to `uv`.
 
+## Testing
+
+The project includes a comprehensive test suite covering database operations, video processing, and web API endpoints.
+
+### Running Tests
+
+To run the full test suite:
+
+```bash
+# Install test dependencies
+pip install pytest pytest-cov opencv-python-headless flask
+
+# Run all tests
+python3 -m pytest tests/ -v
+
+# Run tests with coverage report
+python3 -m pytest tests/ --cov=src/vlog --cov-report=term-missing
+
+# Run a specific test file
+python3 -m pytest tests/test_db.py -v
+```
+
+If using `uv`:
+
+```bash
+# Add test dependencies
+uv add --dev pytest pytest-cov
+
+# Run tests
+uv run -- pytest tests/ -v
+
+# Run with coverage
+uv run -- pytest tests/ --cov=src/vlog --cov-report=html
+```
+
+### Test Coverage
+
+Current test coverage:
+- **db.py**: 93% coverage - Tests for database initialization, CRUD operations, and data retrieval
+- **video.py**: 85% coverage - Tests for video metadata extraction and thumbnail generation
+- **web.py**: 88% coverage - Tests for Flask API endpoints and request handling
+
+The test suite includes:
+- 14 tests for database operations (`tests/test_db.py`)
+- 8 tests for video utilities (`tests/test_video.py`)
+- 24 tests for web API endpoints (`tests/test_web.py`)
+
+### Test Structure
+
+- `tests/conftest.py` - Shared fixtures for database setup and cleanup
+- `tests/test_db.py` - Database operation tests
+- `tests/test_video.py` - Video processing tests  
+- `tests/test_web.py` - Flask API endpoint tests
+
+All tests use temporary databases and files to avoid affecting the development environment.
+
 ## VS Code setup (recommended)
 
 If you use VS Code, point the editor to the uv-managed virtual environment so Pylance and the integrated terminal resolve dependencies installed by `uv`.

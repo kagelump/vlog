@@ -49,3 +49,11 @@ extracted_clips.json
 extracted_clips.csv
 *.srt
 *_cleaned.srt
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+*.cover
+.hypothesis/
