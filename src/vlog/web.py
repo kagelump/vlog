@@ -24,7 +24,6 @@ app = Flask(__name__)
 # Use environment variable for secret key, or generate a random one for development
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(24).hex())
 DATABASE = 'video_results.db'
-VIDEO_DIR = os.getcwd()
 STATIC_DIR = PROJECT_ROOT / 'static'
 
 # Configure logging only if not already configured
@@ -179,7 +178,16 @@ def get_db_connection():
     """Initializes and returns a new database connection, stored in Flask's 'g'."""
     db = getattr(g, '_database', None)
     if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
+        # Open the database file relative to the executor's working directory
+        # so that the launcher can switch which DB is active by changing
+        # ScriptExecutor.working_directory.
+        try:
+            db_path = (Path(executor.working_directory) / DATABASE).resolve()
+        except Exception:
+            # Fallback to the configured DATABASE name in case of any error.
+            db_path = Path(DATABASE).resolve()
+
+        db = g._database = sqlite3.connect(str(db_path))
         db.row_factory = sqlite3.Row
     return db
 
@@ -210,7 +218,25 @@ def results():
 @app.route('/video/<filename>')
 def serve_video(filename):
     """Serves a video file from the working directory."""
-    return send_from_directory(VIDEO_DIR, filename)
+    try:
+        # Resolve and validate the requested file is inside the executor's working directory
+        base_dir = Path(executor.working_directory).resolve()
+        requested_path = (base_dir / filename).resolve()
+
+        try:
+            requested_path.relative_to(base_dir)
+        except ValueError:
+            # Attempted path traversal or outside of working directory
+            return jsonify({'success': False, 'message': 'Invalid file path'}), 400
+
+        if not requested_path.exists() or not requested_path.is_file():
+            return jsonify({'success': False, 'message': 'File not found'}), 404
+
+        # Use send_from_directory to preserve correct headers and range requests
+        return send_from_directory(str(base_dir), str(requested_path.relative_to(base_dir)))
+    except Exception as e:
+        logger.exception(f"Error serving video {filename}: {e}")
+        return jsonify({'success': False, 'message': f'Error serving file: {str(e)}'}), 500
 
 
 # --- Routes: Classification Results API ---
