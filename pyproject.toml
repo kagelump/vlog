@@ -12,6 +12,7 @@ dependencies = [
     "watchdog>=3.0.0",
     "torch>=2.9.0",
     "torch-vision>=0.1.6.dev0",
+    "torchvision>=0.24.0",
 ]
 
 [project.optional-dependencies]
