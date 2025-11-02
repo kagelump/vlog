@@ -10,6 +10,7 @@ import queue
 import time
 import logging
 from pathlib import Path
+from typing import Optional
 from flask import Flask, jsonify, request, send_from_directory, g
 
 # Import all required functions from the dedicated database module
@@ -18,6 +19,15 @@ from vlog.db import get_all_metadata, get_thumbnail_by_filename, \
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+# Import auto-ingest service
+try:
+    from vlog.auto_ingest import AutoIngestService
+    AUTO_INGEST_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Auto-ingest not available: {e}")
+    AUTO_INGEST_AVAILABLE = False
+    AutoIngestService = None
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -170,6 +180,9 @@ class ScriptExecutor:
 
 # Global executor instance
 executor = ScriptExecutor()
+
+# Global auto-ingest service instance
+auto_ingest_service: Optional[AutoIngestService] = None
 
 
 # --- Database Connection Helper ---
@@ -397,6 +410,106 @@ def get_project_info():
         'working_directory': executor.working_directory if executor else os.getcwd(),
         'version': '0.1.0'
     })
+
+
+# --- Routes: Auto-Ingest API ---
+
+@app.route('/api/auto-ingest/status', methods=['GET'])
+def get_auto_ingest_status():
+    """Get the status of the auto-ingest service."""
+    if not AUTO_INGEST_AVAILABLE:
+        return jsonify({
+            'available': False,
+            'message': 'Auto-ingest feature not available (missing dependencies)'
+        }), 503
+    
+    if auto_ingest_service is None:
+        return jsonify({
+            'available': True,
+            'is_running': False,
+            'watch_directory': None,
+            'model_name': None
+        })
+    
+    status = auto_ingest_service.get_status()
+    status['available'] = True
+    return jsonify(status)
+
+
+@app.route('/api/auto-ingest/start', methods=['POST'])
+def start_auto_ingest():
+    """Start the auto-ingest service."""
+    global auto_ingest_service
+    
+    if not AUTO_INGEST_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'message': 'Auto-ingest feature not available (missing dependencies)'
+        }), 503
+    
+    data = request.json or {}
+    watch_dir = data.get('watch_directory') or executor.working_directory
+    model_name = data.get('model_name', 'mlx-community/Qwen3-VL-8B-Instruct-4bit')
+    
+    # Validate directory
+    if not os.path.isdir(watch_dir):
+        return jsonify({
+            'success': False,
+            'message': f'Directory does not exist: {watch_dir}'
+        }), 400
+    
+    # Create or restart service
+    if auto_ingest_service is None:
+        auto_ingest_service = AutoIngestService(watch_dir, model_name)
+    elif auto_ingest_service.is_running:
+        return jsonify({
+            'success': False,
+            'message': 'Auto-ingest is already running'
+        }), 400
+    
+    success = auto_ingest_service.start()
+    
+    if success:
+        return jsonify({
+            'success': True,
+            'message': f'Auto-ingest started, monitoring: {watch_dir}'
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Failed to start auto-ingest service'
+        }), 500
+
+
+@app.route('/api/auto-ingest/stop', methods=['POST'])
+def stop_auto_ingest():
+    """Stop the auto-ingest service."""
+    global auto_ingest_service
+    
+    if not AUTO_INGEST_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'message': 'Auto-ingest feature not available'
+        }), 503
+    
+    if auto_ingest_service is None or not auto_ingest_service.is_running:
+        return jsonify({
+            'success': False,
+            'message': 'Auto-ingest is not running'
+        }), 400
+    
+    success = auto_ingest_service.stop()
+    
+    if success:
+        return jsonify({
+            'success': True,
+            'message': 'Auto-ingest stopped'
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Failed to stop auto-ingest service'
+        }), 500
 
 
 def get_script_description(script_path):
