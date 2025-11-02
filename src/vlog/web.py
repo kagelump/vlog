@@ -454,7 +454,16 @@ def start_auto_ingest():
     watch_dir = data.get('watch_directory') or executor.working_directory
     model_name = data.get('model_name', DEFAULT_AUTOINGEST_MODEL)
     
-    # Validate directory
+    # Validate and normalize directory path
+    try:
+        watch_dir = os.path.abspath(watch_dir)
+    except (TypeError, ValueError) as e:
+        return jsonify({
+            'success': False,
+            'message': f'Invalid directory path: {e}'
+        }), 400
+    
+    # Validate directory exists
     if not os.path.isdir(watch_dir):
         return jsonify({
             'success': False,

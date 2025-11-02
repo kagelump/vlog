@@ -178,8 +178,22 @@ class AutoIngestService:
         logger.info("Scanning for existing unprocessed video files...")
         
         try:
+            watch_dir_obj = Path(self.watch_directory).resolve()
+            
             for filename in os.listdir(self.watch_directory):
+                # Validate filename doesn't contain path separators
+                if os.path.sep in filename or filename.startswith('.'):
+                    continue
+                
                 file_path = os.path.join(self.watch_directory, filename)
+                file_path_obj = Path(file_path).resolve()
+                
+                # Ensure file is within watch directory
+                try:
+                    file_path_obj.relative_to(watch_dir_obj)
+                except ValueError:
+                    logger.warning(f"Skipping file outside watch directory: {filename}")
+                    continue
                 
                 if not os.path.isfile(file_path):
                     continue
