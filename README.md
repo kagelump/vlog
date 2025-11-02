@@ -58,7 +58,20 @@ The launcher provides:
 - Real-time progress tracking and console output
 - Working directory configuration
 - Model and FPS settings
+- **Auto-Ingest**: Automatic monitoring and processing of new video files
 - Easy navigation to classification results
+
+### Auto-Ingest Feature
+
+Auto-ingest automatically monitors a directory for new video files and runs the complete ingestion pipeline (transcribe → clean subtitles → describe) without manual intervention.
+
+**Key benefits:**
+- **Idempotent**: Won't reprocess files already in the database
+- **Automatic**: Detects new files as they're added
+- **Complete**: Runs the full pipeline for each video
+- **Convenient**: Control via web UI or REST API
+
+Enable auto-ingest from the launcher UI, or see the [Auto-Ingest Documentation](docs/AUTO_INGEST.md) for detailed usage and API information.
 
 ### Command Line Usage
 
