@@ -20,15 +20,6 @@ from vlog.db import get_all_metadata, get_thumbnail_by_filename, \
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
-# Import auto-ingest service
-try:
-    from vlog.auto_ingest import AutoIngestService
-    AUTO_INGEST_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"Auto-ingest not available: {e}")
-    AUTO_INGEST_AVAILABLE = False
-    AutoIngestService = None
-
 # --- Flask App Initialization ---
 app = Flask(__name__)
 # Use environment variable for secret key, or generate a random one for development
@@ -40,6 +31,15 @@ STATIC_DIR = PROJECT_ROOT / 'static'
 if not logging.getLogger().handlers:
     logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Import auto-ingest service
+try:
+    from vlog.auto_ingest import AutoIngestService
+    AUTO_INGEST_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Auto-ingest not available: {e}")
+    AUTO_INGEST_AVAILABLE = False
+    AutoIngestService = None
 
 # --- Script Executor (for launcher functionality) ---
 
