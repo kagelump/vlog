@@ -26,6 +26,14 @@ logger = logging.getLogger(__name__)
 # Supported video file extensions
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.MP4', '.MOV', '.AVI', '.MKV'}
 
+# Video length thresholds for FPS adjustment (in seconds)
+VIDEO_LENGTH_THRESHOLD_1 = 120  # 2 minutes
+VIDEO_LENGTH_THRESHOLD_2 = 300  # 5 minutes
+
+# FPS scaling factors
+FPS_SCALE_MEDIUM = 0.5  # For videos between threshold 1 and 2
+FPS_SCALE_LONG = 0.25   # For videos longer than threshold 2
+
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
@@ -236,15 +244,25 @@ class AutoIngestService:
             Path to the generated SRT file, or None if transcription failed.
         """
         try:
+            # Validate video path is within watch directory
+            video_path_obj = Path(video_path).resolve()
+            watch_dir_obj = Path(self.watch_directory).resolve()
+            
+            try:
+                video_path_obj.relative_to(watch_dir_obj)
+            except ValueError:
+                logger.error(f"Video path is outside watch directory: {video_path}")
+                return None
+            
             model = "mlx-community/whisper-large-v3-turbo"
             
-            # Run mlx_whisper command
+            # Run mlx_whisper command with validated path
             cmd = [
                 "mlx_whisper",
                 "--model", model,
                 "-f", "srt",
                 "--task", "transcribe",
-                video_path
+                str(video_path_obj)  # Use resolved absolute path
             ]
             
             logger.info(f"Transcribing: {video_path}")
@@ -252,7 +270,7 @@ class AutoIngestService:
                 cmd,
                 capture_output=True,
                 text=True,
-                cwd=os.path.dirname(video_path),
+                cwd=str(watch_dir_obj),  # Use watch directory as cwd
                 timeout=600  # 10 minute timeout
             )
             
@@ -342,10 +360,10 @@ class AutoIngestService:
             
             # Adjust FPS based on video length
             fps = 1.0
-            if video_length > 120:
-                fps = fps / 2.0
-            if video_length > 300:
-                fps = fps / 2.0
+            if video_length > VIDEO_LENGTH_THRESHOLD_1:
+                fps = fps * FPS_SCALE_MEDIUM
+            if video_length > VIDEO_LENGTH_THRESHOLD_2:
+                fps = fps * FPS_SCALE_LONG
             
             # Generate description
             logger.info(f"Generating description for: {os.path.basename(video_path)}")

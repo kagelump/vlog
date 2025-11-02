@@ -32,6 +32,9 @@ if not logging.getLogger().handlers:
     logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Default ML model for auto-ingest
+DEFAULT_AUTOINGEST_MODEL = 'mlx-community/Qwen3-VL-8B-Instruct-4bit'
+
 # Import auto-ingest service
 try:
     from vlog.auto_ingest import AutoIngestService
@@ -449,7 +452,7 @@ def start_auto_ingest():
     
     data = request.json or {}
     watch_dir = data.get('watch_directory') or executor.working_directory
-    model_name = data.get('model_name', 'mlx-community/Qwen3-VL-8B-Instruct-4bit')
+    model_name = data.get('model_name', DEFAULT_AUTOINGEST_MODEL)
     
     # Validate directory
     if not os.path.isdir(watch_dir):
@@ -458,14 +461,15 @@ def start_auto_ingest():
             'message': f'Directory does not exist: {watch_dir}'
         }), 400
     
-    # Create or restart service
-    if auto_ingest_service is None:
-        auto_ingest_service = AutoIngestService(watch_dir, model_name)
-    elif auto_ingest_service.is_running:
+    # Check if service is already running
+    if auto_ingest_service is not None and auto_ingest_service.is_running:
         return jsonify({
             'success': False,
             'message': 'Auto-ingest is already running'
         }), 400
+    
+    # Create new service (or recreate if parameters changed)
+    auto_ingest_service = AutoIngestService(watch_dir, model_name)
     
     success = auto_ingest_service.start()
     
