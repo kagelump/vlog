@@ -23,14 +23,13 @@ cd "$PROJECT_ROOT"
 
 # Default values
 CORES=1
-DRY_RUN=""
-EXTRA_ARGS=""
+SNAKEMAKE_ARGS=()
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dry-run)
-            DRY_RUN="--dry-run"
+            SNAKEMAKE_ARGS+=("--dry-run")
             shift
             ;;
         --cores)
@@ -38,11 +37,11 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --sd-card)
-            EXTRA_ARGS="$EXTRA_ARGS --config sd_card_path=$2"
+            SNAKEMAKE_ARGS+=("--config" "sd_card_path=$2")
             shift 2
             ;;
         --forceall)
-            EXTRA_ARGS="$EXTRA_ARGS --forceall"
+            SNAKEMAKE_ARGS+=("--forceall")
             shift
             ;;
         --help)
@@ -97,7 +96,7 @@ fi
 echo "=== Snakemake Video Ingestion Workflow ==="
 echo "Project root: $PROJECT_ROOT"
 echo "Cores: $CORES"
-if [ -n "$DRY_RUN" ]; then
+if [[ " ${SNAKEMAKE_ARGS[*]} " =~ " --dry-run " ]]; then
     echo "Mode: DRY RUN (preview only)"
 else
     echo "Mode: EXECUTE"
@@ -109,12 +108,11 @@ echo ""
 snakemake \
     --cores "$CORES" \
     --configfile config.yaml \
-    $DRY_RUN \
-    $EXTRA_ARGS
+    "${SNAKEMAKE_ARGS[@]}"
 
 echo ""
 echo "Workflow complete!"
-if [ -z "$DRY_RUN" ]; then
+if [[ ! " ${SNAKEMAKE_ARGS[*]} " =~ " --dry-run " ]]; then
     echo ""
     echo "Results are in:"
     echo "  Main videos:    videos/main/"

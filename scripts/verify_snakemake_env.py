@@ -87,13 +87,9 @@ def main():
     # Check vlog modules (optional, may fail if not in PYTHONPATH)
     print("Checking vlog modules (optional)...")
     sys.path.insert(0, str(project_root / "src"))
-    try:
-        all_ok &= check_python_module("vlog.describe_lib", "Ensure PYTHONPATH includes src/")
-        all_ok &= check_python_module("vlog.video", "Ensure PYTHONPATH includes src/")
-        all_ok &= check_python_module("vlog.srt_cleaner", "Ensure PYTHONPATH includes src/")
-    except ImportError as e:
-        print(f"⚠️  Warning: Could not import vlog modules: {e}")
-        print("   This is OK if running from the project root")
+    all_ok &= check_python_module("vlog.describe_lib", "Ensure PYTHONPATH includes src/")
+    all_ok &= check_python_module("vlog.video", "Ensure PYTHONPATH includes src/")
+    all_ok &= check_python_module("vlog.srt_cleaner", "Ensure PYTHONPATH includes src/")
     print()
     
     # Summary
