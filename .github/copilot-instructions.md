@@ -165,9 +165,3 @@ try:
 except Exception as e:
     return jsonify({"success": False, "message": str(e)}), 500
 ```
-
-## Submodules
-- The `third_party/mlx-vlm` directory is a git submodule
-- Don't modify code in third_party unless absolutely necessary
-- Use `git submodule update --init --recursive` to initialize
-- Use `git submodule update --remote --merge --recursive` to update

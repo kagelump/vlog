@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package vlog;
+
+// Optional: for future schema evolution
+option go_package = "vlogpb";
+
+// Describes a segment (in/out timestamps)
+message Segment {
+  string in_timestamp = 1;
+  string out_timestamp = 2;
+}
+
+// Main video description record
+message VideoDescription {
+  string filename = 1;
+  string video_description_long = 2;
+  string video_description_short = 3;
+  string primary_shot_type = 4;
+  repeated string tags = 5;
+  string last_updated = 6; // ISO8601 string
+  double classification_time_seconds = 7;
+  string classification_model = 8;
+  double video_length_seconds = 9;
+  string video_timestamp = 10;
+  string video_thumbnail_base64 = 11;
+  double clip_cut_duration = 12;
+  int32 keep = 13; // 1=Keep, 0=Discard
+  string in_timestamp = 14;
+  string out_timestamp = 15;
+  double rating = 16;
+  repeated Segment segments = 17; // Optional array of segments
+}

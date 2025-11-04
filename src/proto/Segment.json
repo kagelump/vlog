@@ -1,0 +1,20 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "$ref": "#/definitions/Segment",
+    "definitions": {
+        "Segment": {
+            "properties": {
+                "in_timestamp": {
+                    "type": "string"
+                },
+                "out_timestamp": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Segment",
+            "description": "Describes a segment (in/out timestamps)"
+        }
+    }
+}

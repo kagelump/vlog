@@ -1,0 +1,88 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "$ref": "#/definitions/VideoDescription",
+    "definitions": {
+        "VideoDescription": {
+            "properties": {
+                "filename": {
+                    "type": "string"
+                },
+                "video_description_long": {
+                    "type": "string"
+                },
+                "video_description_short": {
+                    "type": "string"
+                },
+                "primary_shot_type": {
+                    "type": "string"
+                },
+                "tags": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "last_updated": {
+                    "type": "string",
+                    "description": "ISO8601 string"
+                },
+                "classification_time_seconds": {
+                    "type": "number"
+                },
+                "classification_model": {
+                    "type": "string"
+                },
+                "video_length_seconds": {
+                    "type": "number"
+                },
+                "video_timestamp": {
+                    "type": "string"
+                },
+                "video_thumbnail_base64": {
+                    "type": "string"
+                },
+                "clip_cut_duration": {
+                    "type": "number"
+                },
+                "keep": {
+                    "type": "integer",
+                    "description": "1=Keep, 0=Discard"
+                },
+                "in_timestamp": {
+                    "type": "string"
+                },
+                "out_timestamp": {
+                    "type": "string"
+                },
+                "rating": {
+                    "type": "number"
+                },
+                "segments": {
+                    "items": {
+                        "$ref": "#/definitions/vlog.Segment"
+                    },
+                    "type": "array",
+                    "description": "Optional array of segments"
+                }
+            },
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Video Description",
+            "description": "Main video description record"
+        },
+        "vlog.Segment": {
+            "properties": {
+                "in_timestamp": {
+                    "type": "string"
+                },
+                "out_timestamp": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Segment",
+            "description": "Describes a segment (in/out timestamps)"
+        }
+    }
+}
