@@ -248,7 +248,7 @@ class AutoIngestService:
             video_path_obj = Path(video_path).resolve()
             video_dir = video_path_obj.parent
             stem = video_path_obj.stem
-            extension = video_path_obj.suffix[1:]  # Remove leading dot
+            extension = video_path_obj.suffix[1:] if video_path_obj.suffix else 'mp4'  # Default to mp4 if no extension
             
             # Create a temporary config file for this run
             with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
@@ -284,7 +284,7 @@ class AutoIngestService:
                     return False, ""
                 
                 # Target: the final JSON file
-                json_target = f"{video_dir}/{stem}.json"
+                json_target = str(video_dir / f"{stem}.json")
                 
                 # Run Snakemake
                 cmd = [
@@ -318,7 +318,7 @@ class AutoIngestService:
                 # Clean up temporary config
                 try:
                     os.unlink(temp_config)
-                except (OSError, FileNotFoundError) as e:
+                except OSError as e:
                     logger.warning(f"Failed to cleanup temp config: {e}")
                     
         except subprocess.TimeoutExpired:

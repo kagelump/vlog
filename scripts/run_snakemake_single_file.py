@@ -116,8 +116,9 @@ def run_snakemake_for_file(
         # Clean up temporary config file
         try:
             os.unlink(temp_config)
-        except (OSError, FileNotFoundError) as e:
+        except OSError:
             # Ignore cleanup errors - temp file will be cleaned by system eventually
+            # Could log at debug level if needed
             pass
 
 
