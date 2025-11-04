@@ -1,16 +1,18 @@
 # Auto-Ingest Feature
 
-The auto-ingest feature provides automatic monitoring and processing of video files in a directory. When enabled, vlog will automatically detect new video files and run them through the complete ingestion pipeline.
+The auto-ingest feature provides automatic monitoring and processing of video files in a directory. When enabled, vlog will automatically detect new video files and run them through the complete ingestion pipeline using the Snakemake workflow.
 
 ## Overview
 
 Auto-ingest eliminates the need to manually run ingestion scripts for each new video file. Once enabled, it:
 
 1. **Monitors** a directory for new video files (`.mp4`, `.mov`, `.avi`, `.mkv`)
-2. **Transcribes** videos using mlx_whisper
-3. **Cleans** subtitles to remove duplicates and hallucinations
-4. **Describes** videos using the ML vision model
-5. **Saves** all results to the database
+2. **Invokes Snakemake** to process each new file through the pipeline
+3. **Transcribes** videos using mlx_whisper (via Snakemake)
+4. **Cleans** subtitles to remove duplicates and hallucinations (via Snakemake)
+5. **Describes** videos using the ML vision model (via Snakemake)
+6. **Imports** JSON results to the database
+7. **Saves** all results to the database
 
 ## Key Features
 
@@ -24,25 +26,36 @@ The auto-ingest service is **idempotent** - it will not reprocess files that are
 
 The idempotency check is performed using the `check_if_file_exists()` function, which queries the database before any processing begins.
 
-### Complete Pipeline Integration
+### Snakemake Pipeline Integration
 
-Auto-ingest runs the full ingestion pipeline for each new video:
+Auto-ingest now uses the **Snakemake workflow** to process each new video file. This provides:
 
-1. **Transcription** (`mlx_whisper`)
+- **Consistency**: Same processing pipeline as batch SD card ingestion
+- **Robustness**: Snakemake's dependency tracking and error handling
+- **Flexibility**: Easy to modify pipeline by editing the Snakefile
+
+The pipeline runs for each new video:
+
+1. **Transcription** (Snakemake `transcribe` rule)
    - Generates `.srt` subtitle files
    - Uses the whisper-large-v3-turbo model
-   - 10-minute timeout per video
+   - Timeout managed by Snakemake
 
-2. **Subtitle Cleaning** (`srt_cleaner.py`)
+2. **Subtitle Cleaning** (Snakemake `clean_subtitles` rule)
    - Removes duplicate subtitle entries
    - Detects and removes ASR hallucinations
    - Creates `*_cleaned.srt` files
 
-3. **Video Description** (`describe.py`)
+3. **Video Description** (Snakemake `describe` rule)
    - Analyzes video content using ML vision model
    - Extracts metadata (shot type, tags, timestamps, etc.)
    - Generates thumbnails
-   - Saves results to database
+   - Outputs to JSON file
+
+4. **Database Import** (auto-ingest service)
+   - Reads JSON output from Snakemake
+   - Inserts results into SQLite database
+   - Maintains compatibility with existing tools
 
 ## Using Auto-Ingest
 
@@ -128,21 +141,18 @@ By default, auto-ingest uses `mlx-community/Qwen3-VL-8B-Instruct-4bit`. You can 
 
 ### FPS Adjustment
 
-Auto-ingest automatically adjusts the frame sampling rate based on video length:
-- Videos < 120s: 1.0 FPS
-- Videos 120-300s: 0.5 FPS
-- Videos > 300s: 0.25 FPS
-
-This optimization reduces processing time for longer videos while maintaining quality.
+FPS is automatically adjusted based on video length via the `describe_to_json.py` script in the Snakemake workflow.
 
 ## Requirements
 
 Auto-ingest requires the following dependencies:
 
 - `flask>=3.1.2` - Web server
+- `snakemake>=8.0.0` - Workflow management system (new requirement)
 - `watchdog>=3.0.0` - File system monitoring
 - `mlx-vlm>=0.3.5` - Vision language model
 - `mlx-whisper` - Audio transcription (install separately)
+- `ffmpeg` - Video processing (for preview creation if needed)
 
 If any dependencies are missing, the auto-ingest feature will be unavailable and the API will return a 503 status.
 
@@ -213,9 +223,13 @@ VideoFileHandler (watchdog.events.FileSystemEventHandler)
     ↓
 AutoIngestService
     ↓
-    ├─> _transcribe_video() → mlx_whisper
-    ├─> _clean_subtitles() → srt_cleaner
-    └─> _describe_and_save() → describe.py → database
+    ├─> _run_snakemake_pipeline() → Snakemake workflow
+    │       ↓
+    │       ├─> rule transcribe → mlx_whisper
+    │       ├─> rule clean_subtitles → srt_cleaner
+    │       └─> rule describe → describe_to_json.py → JSON
+    │
+    └─> _import_json_to_database() → database
 ```
 
 ### Idempotency Implementation
@@ -229,15 +243,37 @@ def _process_video_file(self, file_path: str) -> None:
         logger.info(f"File already processed, skipping: {filename}")
         return
     
-    # Process only if not in database
-    self._transcribe_video(file_path)
-    self._clean_subtitles(srt_path)
-    self._describe_and_save(file_path, cleaned_srt_path)
+    # Run Snakemake pipeline
+    success, json_path = self._run_snakemake_pipeline(file_path)
+    
+    # Import JSON results to database
+    if success:
+        self._import_json_to_database(json_path)
+```
+
+### Snakemake Integration
+
+Auto-ingest creates a temporary Snakemake configuration for each file:
+
+```python
+config = {
+    'sd_card_path': str(video_dir),
+    'main_folder': str(video_dir),
+    'preview_folder': str(video_dir),
+    'video_extensions': [extension],
+    'transcribe': {'model': 'mlx-community/whisper-large-v3-turbo'},
+    'describe': {'model': model_name, 'max_pixels': 224}
+}
+```
+
+Then runs Snakemake targeting the JSON output:
+```bash
+snakemake --snakefile Snakefile --configfile temp.yaml --cores 1 video.json
 ```
 
 ### Database Integration
 
-Results are saved using the standard `insert_result()` function, which stores:
+Results are loaded from JSON and saved using the standard `insert_result()` function, which stores:
 - Video metadata (length, timestamp, filename)
 - Classification results (description, shot type, tags, rating)
 - Timing information (in/out timestamps, segments)
@@ -246,4 +282,5 @@ Results are saved using the standard `insert_result()` function, which stores:
 ## See Also
 
 - [Main README](../README.md) - General project documentation
+- [Snakemake Workflow](SNAKEMAKE_WORKFLOW.md) - Detailed Snakemake pipeline documentation
 - [DaVinci Integration](DAVINCI_INTEGRATION.md) - Using results with DaVinci Resolve
