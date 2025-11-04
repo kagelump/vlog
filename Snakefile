@@ -92,9 +92,19 @@ rule copy_main:
         f"{MAIN_FOLDER}/{{stem}}.mp4"
     run:
         import shutil
+        from pathlib import Path
+        
         os.makedirs(MAIN_FOLDER, exist_ok=True)
-        print(f"Copying main file: {input[0]} -> {output[0]}")
-        shutil.copy2(input[0], output[0])
+        
+        # Check if source and destination are the same
+        src_path = Path(input[0]).resolve()
+        dst_path = Path(output[0]).resolve()
+        
+        if src_path == dst_path:
+            print(f"Source and destination are the same, skipping copy: {input[0]}")
+        else:
+            print(f"Copying main file: {input[0]} -> {output[0]}")
+            shutil.copy2(input[0], output[0])
 
 
 # Rule: Copy preview file if it exists, otherwise create it
@@ -105,30 +115,38 @@ rule copy_or_create_preview:
         f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}"
     run:
         import shutil
+        from pathlib import Path
         
         os.makedirs(PREVIEW_FOLDER, exist_ok=True)
         
-        # Check if preview file exists on SD card
-        video_info = next((v for v in VIDEOS if v["stem"] == wildcards.stem), None)
+        # Check if source and destination are the same (local mode)
+        src_path = Path(input.main).resolve()
+        dst_path = Path(output[0]).resolve()
         
-        if video_info and video_info.get("has_preview"):
-            # Copy existing preview file
-            preview_src = video_info["preview_file"]
-            print(f"Copying existing preview file: {preview_src} -> {output[0]}")
-            shutil.copy2(preview_src, output[0])
+        if src_path == dst_path:
+            print(f"Source and destination are the same (local mode), skipping copy: {input.main}")
         else:
-            # Create preview file using ffmpeg
-            print(f"Creating preview file from: {input.main}")
-            cmd = [
-                "python3",
-                "scripts/create_preview.py",
-                input.main,
-                output[0],
-                str(PREVIEW_WIDTH),
-                str(PREVIEW_CRF),
-                PREVIEW_PRESET
-            ]
-            subprocess.run(cmd, check=True)
+            # Check if preview file exists on SD card
+            video_info = next((v for v in VIDEOS if v["stem"] == wildcards.stem), None)
+            
+            if video_info and video_info.get("has_preview"):
+                # Copy existing preview file
+                preview_src = video_info["preview_file"]
+                print(f"Copying existing preview file: {preview_src} -> {output[0]}")
+                shutil.copy2(preview_src, output[0])
+            else:
+                # Create preview file using ffmpeg
+                print(f"Creating preview file from: {input.main}")
+                cmd = [
+                    "python3",
+                    "scripts/create_preview.py",
+                    input.main,
+                    output[0],
+                    str(PREVIEW_WIDTH),
+                    str(PREVIEW_CRF),
+                    PREVIEW_PRESET
+                ]
+                subprocess.run(cmd, check=True)
 
 
 # Rule: Transcribe preview file to generate subtitles
