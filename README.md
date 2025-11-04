@@ -73,6 +73,24 @@ Auto-ingest automatically monitors a directory for new video files and runs the 
 
 Enable auto-ingest from the launcher UI, or see the [Auto-Ingest Documentation](docs/AUTO_INGEST.md) for detailed usage and API information.
 
+### Snakemake Workflow (SD Card Ingestion)
+
+For automated ingestion from SD cards with a complete orchestrated pipeline, use the Snakemake workflow:
+
+```bash
+cd /path/to/vlog
+# Edit config.yaml to set your SD card path
+snakemake --cores 1 --configfile config.yaml
+```
+
+The Snakemake workflow provides:
+- **Organized**: Separate main and preview file storage
+- **Flexible**: Copy or create preview files as needed
+- **Complete**: Full pipeline from SD card to JSON output
+- **Reproducible**: Workflow-based processing with dependency tracking
+
+See the [Snakemake Quick Start Guide](docs/SNAKEMAKE_QUICKSTART.md) or [Snakemake Workflow Documentation](docs/SNAKEMAKE_WORKFLOW.md) for detailed usage.
+
 ### Command Line Usage
 
 To run the ingestion pipeline directly:
