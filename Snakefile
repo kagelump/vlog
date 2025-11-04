@@ -74,6 +74,15 @@ VIDEOS = discover_videos()
 VIDEO_STEMS = [v["stem"] for v in VIDEOS]
 
 
+# Helper function to check if source and destination are the same
+def should_skip_copy(src, dst):
+    """Check if source and destination paths are the same (local mode)."""
+    from pathlib import Path
+    src_path = Path(src).resolve()
+    dst_path = Path(dst).resolve()
+    return src_path == dst_path
+
+
 # Rule: Process all videos
 rule all:
     input:
@@ -92,9 +101,16 @@ rule copy_main:
         f"{MAIN_FOLDER}/{{stem}}.mp4"
     run:
         import shutil
+        from pathlib import Path
+        
         os.makedirs(MAIN_FOLDER, exist_ok=True)
-        print(f"Copying main file: {input[0]} -> {output[0]}")
-        shutil.copy2(input[0], output[0])
+        
+        # Check if source and destination are the same (local mode)
+        if should_skip_copy(input[0], output[0]):
+            print(f"Source and destination are the same, skipping copy: {input[0]}")
+        else:
+            print(f"Copying main file: {input[0]} -> {output[0]}")
+            shutil.copy2(input[0], output[0])
 
 
 # Rule: Copy preview file if it exists, otherwise create it
@@ -105,30 +121,35 @@ rule copy_or_create_preview:
         f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}"
     run:
         import shutil
+        from pathlib import Path
         
         os.makedirs(PREVIEW_FOLDER, exist_ok=True)
         
-        # Check if preview file exists on SD card
-        video_info = next((v for v in VIDEOS if v["stem"] == wildcards.stem), None)
-        
-        if video_info and video_info.get("has_preview"):
-            # Copy existing preview file
-            preview_src = video_info["preview_file"]
-            print(f"Copying existing preview file: {preview_src} -> {output[0]}")
-            shutil.copy2(preview_src, output[0])
+        # Check if source and destination are the same (local mode)
+        if should_skip_copy(input.main, output[0]):
+            print(f"Source and destination are the same (local mode), skipping copy: {input.main}")
         else:
-            # Create preview file using ffmpeg
-            print(f"Creating preview file from: {input.main}")
-            cmd = [
-                "python3",
-                "scripts/create_preview.py",
-                input.main,
-                output[0],
-                str(PREVIEW_WIDTH),
-                str(PREVIEW_CRF),
-                PREVIEW_PRESET
-            ]
-            subprocess.run(cmd, check=True)
+            # Check if preview file exists on SD card
+            video_info = next((v for v in VIDEOS if v["stem"] == wildcards.stem), None)
+            
+            if video_info and video_info.get("has_preview"):
+                # Copy existing preview file
+                preview_src = video_info["preview_file"]
+                print(f"Copying existing preview file: {preview_src} -> {output[0]}")
+                shutil.copy2(preview_src, output[0])
+            else:
+                # Create preview file using ffmpeg
+                print(f"Creating preview file from: {input.main}")
+                cmd = [
+                    "python3",
+                    "scripts/create_preview.py",
+                    input.main,
+                    output[0],
+                    str(PREVIEW_WIDTH),
+                    str(PREVIEW_CRF),
+                    PREVIEW_PRESET
+                ]
+                subprocess.run(cmd, check=True)
 
 
 # Rule: Transcribe preview file to generate subtitles
@@ -187,3 +208,50 @@ rule describe:
         """
         python3 scripts/describe_to_json.py {input.video} {input.subtitle} {output} {params.model} 1.0 {params.max_pixels}
         """
+
+
+# Rule: Import JSON results to database (optional)
+# This rule is used by auto-ingest to save results to the database
+rule json_to_db:
+    input:
+        f"{PREVIEW_FOLDER}/{{stem}}.json"
+    output:
+        touch(f"{PREVIEW_FOLDER}/{{stem}}.db_imported")
+    run:
+        import sys
+        import json
+        
+        # Add src to path
+        project_root = Path(workflow.basedir)
+        sys.path.insert(0, str(project_root / "src"))
+        
+        from vlog.db import insert_result, initialize_db
+        
+        # Initialize database
+        initialize_db()
+        
+        # Load JSON data
+        with open(input[0], 'r') as f:
+            data = json.load(f)
+        
+        print(f"Importing {data['filename']} to database")
+        
+        # Insert into database
+        insert_result(
+            filename=data['filename'],
+            video_description_long=data.get('video_description_long', ''),
+            video_description_short=data.get('video_description_short', ''),
+            primary_shot_type=data.get('primary_shot_type', ''),
+            tags=data.get('tags', []),
+            classification_time_seconds=data.get('classification_time_seconds', 0.0),
+            classification_model=data.get('classification_model', ''),
+            video_length_seconds=data.get('video_length_seconds', 0.0),
+            video_timestamp=data.get('video_timestamp', ''),
+            video_thumbnail_base64=data.get('video_thumbnail_base64', ''),
+            in_timestamp=data.get('in_timestamp'),
+            out_timestamp=data.get('out_timestamp'),
+            rating=data.get('rating', 0.0),
+            segments=data.get('segments')
+        )
+        
+        print(f"Successfully imported {data['filename']} to database")
