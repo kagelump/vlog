@@ -187,3 +187,50 @@ rule describe:
         """
         python3 scripts/describe_to_json.py {input.video} {input.subtitle} {output} {params.model} 1.0 {params.max_pixels}
         """
+
+
+# Rule: Import JSON results to database (optional)
+# This rule is used by auto-ingest to save results to the database
+rule json_to_db:
+    input:
+        f"{PREVIEW_FOLDER}/{{stem}}.json"
+    output:
+        touch(f"{PREVIEW_FOLDER}/{{stem}}.db_imported")
+    run:
+        import sys
+        import json
+        
+        # Add src to path
+        project_root = Path(workflow.basedir)
+        sys.path.insert(0, str(project_root / "src"))
+        
+        from vlog.db import insert_result, initialize_db
+        
+        # Initialize database
+        initialize_db()
+        
+        # Load JSON data
+        with open(input[0], 'r') as f:
+            data = json.load(f)
+        
+        print(f"Importing {data['filename']} to database")
+        
+        # Insert into database
+        insert_result(
+            filename=data['filename'],
+            video_description_long=data.get('video_description_long', ''),
+            video_description_short=data.get('video_description_short', ''),
+            primary_shot_type=data.get('primary_shot_type', ''),
+            tags=data.get('tags', []),
+            classification_time_seconds=data.get('classification_time_seconds', 0.0),
+            classification_model=data.get('classification_model', ''),
+            video_length_seconds=data.get('video_length_seconds', 0.0),
+            video_timestamp=data.get('video_timestamp', ''),
+            video_thumbnail_base64=data.get('video_thumbnail_base64', ''),
+            in_timestamp=data.get('in_timestamp'),
+            out_timestamp=data.get('out_timestamp'),
+            rating=data.get('rating', 0.0),
+            segments=data.get('segments')
+        )
+        
+        print(f"Successfully imported {data['filename']} to database")

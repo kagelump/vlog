@@ -2,7 +2,7 @@
 Auto-ingest service for monitoring directories and automatically processing new video files.
 
 This module provides a file system watcher that monitors a directory for new video files
-and automatically runs the ingestion pipeline (transcription, subtitle cleaning, and description).
+and automatically runs the ingestion pipeline via Snakemake workflow.
 """
 
 import os
@@ -10,29 +10,20 @@ import time
 import logging
 import subprocess
 import threading
+import tempfile
+import yaml
+import json
 from pathlib import Path
 from typing import Optional, Callable
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 from vlog.db import check_if_file_exists, initialize_db
-from vlog.describe import describe_video, load_subtitle_file
-from vlog.video import get_video_length_and_timestamp, get_video_thumbnail
-from vlog.db import insert_result
-from vlog.srt_cleaner import parse_srt, clean_subtitles, reassemble_srt
 
 logger = logging.getLogger(__name__)
 
 # Supported video file extensions
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.MP4', '.MOV', '.AVI', '.MKV'}
-
-# Video length thresholds for FPS adjustment (in seconds)
-VIDEO_LENGTH_THRESHOLD_1 = 120  # 2 minutes
-VIDEO_LENGTH_THRESHOLD_2 = 300  # 5 minutes
-
-# FPS scaling factors
-FPS_SCALE_MEDIUM = 0.5  # For videos between threshold 1 and 2
-FPS_SCALE_LONG = 0.25   # For videos longer than threshold 2
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -78,7 +69,7 @@ class VideoFileHandler(FileSystemEventHandler):
 
 
 class AutoIngestService:
-    """Service for automatically ingesting new video files."""
+    """Service for automatically ingesting new video files using Snakemake pipeline."""
     
     def __init__(self, watch_directory: str, model_name: str = "mlx-community/Qwen3-VL-8B-Instruct-4bit"):
         """
@@ -92,10 +83,6 @@ class AutoIngestService:
         self.model_name = model_name
         self.observer: Optional[Observer] = None
         self.is_running = False
-        self._model = None
-        self._processor = None
-        self._config = None
-        self._lock = threading.Lock()
         
         # Ensure database is initialized
         initialize_db()
@@ -214,7 +201,7 @@ class AutoIngestService:
     
     def _process_video_file(self, file_path: str) -> None:
         """
-        Process a single video file through the complete ingestion pipeline.
+        Process a single video file through the Snakemake pipeline.
         
         This method is idempotent - it will skip files that have already been processed.
         
@@ -231,196 +218,156 @@ class AutoIngestService:
             
             logger.info(f"Processing new video file: {filename}")
             
-            # Step 1: Transcribe (create subtitle file)
-            srt_path = self._transcribe_video(file_path)
+            # Run Snakemake pipeline for this file
+            success, json_path = self._run_snakemake_pipeline(file_path)
             
-            # Step 2: Clean subtitles
-            cleaned_srt_path = None
-            if srt_path and os.path.exists(srt_path):
-                cleaned_srt_path = self._clean_subtitles(srt_path)
+            if not success:
+                logger.error(f"Snakemake pipeline failed for: {filename}")
+                return
             
-            # Step 3: Describe video (using ML model)
-            self._describe_and_save(file_path, cleaned_srt_path)
+            # Import JSON results to database
+            self._import_json_to_database(json_path)
             
             logger.info(f"Successfully processed: {filename}")
             
         except Exception as e:
             logger.error(f"Error processing {filename}: {e}", exc_info=True)
     
-    def _transcribe_video(self, video_path: str) -> Optional[str]:
+    def _run_snakemake_pipeline(self, video_path: str) -> tuple[bool, str]:
         """
-        Transcribe video to subtitle file using mlx_whisper.
+        Run Snakemake pipeline for a single video file.
         
         Args:
             video_path: Path to the video file.
             
         Returns:
-            Path to the generated SRT file, or None if transcription failed.
+            Tuple of (success, json_output_path)
         """
         try:
-            # Validate video path is within watch directory
             video_path_obj = Path(video_path).resolve()
-            watch_dir_obj = Path(self.watch_directory).resolve()
+            video_dir = video_path_obj.parent
+            stem = video_path_obj.stem
+            extension = video_path_obj.suffix[1:]  # Remove leading dot
+            
+            # Create a temporary config file for this run
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+                config = {
+                    'sd_card_path': str(video_dir),
+                    'main_folder': str(video_dir),
+                    'preview_folder': str(video_dir),
+                    'video_extensions': [extension],
+                    'preview_suffix': '_preview',
+                    'preview_extension': extension,
+                    'preview_settings': {
+                        'width': 1280,
+                        'crf': 23,
+                        'preset': 'medium'
+                    },
+                    'transcribe': {
+                        'model': 'mlx-community/whisper-large-v3-turbo'
+                    },
+                    'describe': {
+                        'model': self.model_name,
+                        'max_pixels': 224
+                    }
+                }
+                yaml.dump(config, f)
+                temp_config = f.name
             
             try:
-                video_path_obj.relative_to(watch_dir_obj)
-            except ValueError:
-                logger.error(f"Video path is outside watch directory: {video_path}")
-                return None
-            
-            model = "mlx-community/whisper-large-v3-turbo"
-            
-            # Run mlx_whisper command with validated path
-            cmd = [
-                "mlx_whisper",
-                "--model", model,
-                "-f", "srt",
-                "--task", "transcribe",
-                str(video_path_obj)  # Use resolved absolute path
-            ]
-            
-            logger.info(f"Transcribing: {video_path}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=str(watch_dir_obj),  # Use watch directory as cwd
-                timeout=600  # 10 minute timeout
-            )
-            
-            if result.returncode != 0:
-                logger.error(f"Transcription failed: {result.stderr}")
-                return None
-            
-            # SRT file should be created with same name as video
-            srt_path = os.path.splitext(video_path)[0] + '.srt'
-            
-            if os.path.exists(srt_path):
-                logger.info(f"Transcription complete: {srt_path}")
-                return srt_path
-            else:
-                logger.warning(f"SRT file not found after transcription: {srt_path}")
-                return None
+                # Path to Snakefile
+                snakefile = PROJECT_ROOT / 'Snakefile'
                 
+                if not snakefile.exists():
+                    logger.error(f"Snakefile not found at {snakefile}")
+                    return False, ""
+                
+                # Target: the final JSON file
+                json_target = f"{video_dir}/{stem}.json"
+                
+                # Run Snakemake
+                cmd = [
+                    'snakemake',
+                    '--snakefile', str(snakefile),
+                    '--configfile', temp_config,
+                    '--cores', '1',
+                    '--quiet',
+                    json_target
+                ]
+                
+                logger.info(f"Running Snakemake pipeline for: {video_path_obj.name}")
+                result = subprocess.run(
+                    cmd,
+                    cwd=str(PROJECT_ROOT),
+                    capture_output=True,
+                    text=True,
+                    timeout=1800  # 30 minute timeout
+                )
+                
+                if result.returncode != 0:
+                    logger.error(f"Snakemake pipeline failed: {result.stderr}")
+                    if result.stdout:
+                        logger.error(f"Snakemake stdout: {result.stdout}")
+                    return False, ""
+                
+                logger.info(f"Snakemake pipeline completed for: {video_path_obj.name}")
+                return True, json_target
+                
+            finally:
+                # Clean up temporary config
+                try:
+                    os.unlink(temp_config)
+                except:
+                    pass
+                    
         except subprocess.TimeoutExpired:
-            logger.error(f"Transcription timeout for: {video_path}")
-            return None
+            logger.error(f"Snakemake pipeline timeout for: {video_path}")
+            return False, ""
         except Exception as e:
-            logger.error(f"Transcription error: {e}")
-            return None
+            logger.error(f"Snakemake pipeline error: {e}")
+            return False, ""
     
-    def _clean_subtitles(self, srt_path: str) -> Optional[str]:
+    def _import_json_to_database(self, json_path: str) -> None:
         """
-        Clean subtitle file to remove duplicates and hallucinations.
+        Import JSON results into the database.
         
         Args:
-            srt_path: Path to the subtitle file.
-            
-        Returns:
-            Path to the cleaned SRT file, or None if cleaning failed.
+            json_path: Path to the JSON file with results.
         """
         try:
-            logger.info(f"Cleaning subtitles: {srt_path}")
+            if not os.path.exists(json_path):
+                logger.error(f"JSON file not found: {json_path}")
+                return
             
-            # Parse SRT file
-            subtitles = parse_srt(srt_path)
+            logger.info(f"Importing results from: {json_path}")
             
-            # Clean subtitles
-            cleaned_subtitles = clean_subtitles(subtitles)
+            # Load JSON data
+            with open(json_path, 'r') as f:
+                data = json.load(f)
             
-            # Save cleaned version
-            cleaned_path = srt_path.replace('.srt', '_cleaned.srt')
-            with open(cleaned_path, 'w', encoding='utf-8') as f:
-                f.write(reassemble_srt(cleaned_subtitles))
+            # Import required function
+            from vlog.db import insert_result
             
-            logger.info(f"Subtitles cleaned: {cleaned_path}")
-            return cleaned_path
-            
-        except Exception as e:
-            logger.error(f"Subtitle cleaning error: {e}")
-            return None
-    
-    def _load_model_lazy(self):
-        """Lazy-load the ML model, processor and config."""
-        with self._lock:
-            if self._model is None:
-                from mlx_vlm import load
-                from mlx_vlm.utils import load_config
-                
-                logger.info(f"Loading model: {self.model_name}")
-                self._model, self._processor = load(self.model_name)
-                self._config = load_config(self.model_name)
-                logger.info("Model loaded successfully")
-    
-    def _describe_and_save(self, video_path: str, subtitle_path: Optional[str] = None) -> None:
-        """
-        Generate video description using ML model and save to database.
-        
-        Args:
-            video_path: Path to the video file.
-            subtitle_path: Optional path to subtitle file.
-        """
-        try:
-            # Load model if not already loaded
-            self._load_model_lazy()
-            
-            # Load subtitle if available
-            subtitle_text = None
-            if subtitle_path and os.path.exists(subtitle_path):
-                subtitle_text = load_subtitle_file(subtitle_path)
-            
-            # Get video metadata
-            video_length, video_timestamp = get_video_length_and_timestamp(video_path)
-            
-            # Adjust FPS based on video length
-            fps = 1.0
-            if video_length > VIDEO_LENGTH_THRESHOLD_1:
-                fps = fps * FPS_SCALE_MEDIUM
-            if video_length > VIDEO_LENGTH_THRESHOLD_2:
-                fps = fps * FPS_SCALE_LONG
-            
-            # Generate description
-            logger.info(f"Generating description for: {os.path.basename(video_path)}")
-            start_time = time.time()
-            
-            desc = describe_video(
-                self._model,
-                self._processor,
-                self._config,
-                video_path,
-                prompt=None,  # Use default prompt
-                fps=fps,
-                subtitle=subtitle_text,
-                max_tokens=10000,
-                temperature=0.7
-            )
-            
-            classification_time = time.time() - start_time
-            
-            # Get thumbnail
-            thumbnail_frame = int(desc.get('thumbnail_frame', 0))
-            thumbnail_base64 = get_video_thumbnail(video_path, thumbnail_frame, fps)
-            
-            # Save to database
+            # Insert into database
             insert_result(
-                filename=os.path.basename(video_path),
-                video_description_long=desc['description'],
-                video_description_short=desc['short_name'],
-                primary_shot_type=desc.get('primary_shot_type'),
-                tags=desc.get('tags', []),
-                classification_time_seconds=classification_time,
-                classification_model=self.model_name,
-                video_length_seconds=video_length,
-                video_timestamp=video_timestamp,
-                video_thumbnail_base64=thumbnail_base64,
-                in_timestamp=desc.get('in_timestamp'),
-                out_timestamp=desc.get('out_timestamp'),
-                rating=desc.get('rating', 0.0),
-                segments=desc.get('segments')
+                filename=data['filename'],
+                video_description_long=data.get('video_description_long', ''),
+                video_description_short=data.get('video_description_short', ''),
+                primary_shot_type=data.get('primary_shot_type', ''),
+                tags=data.get('tags', []),
+                classification_time_seconds=data.get('classification_time_seconds', 0.0),
+                classification_model=data.get('classification_model', ''),
+                video_length_seconds=data.get('video_length_seconds', 0.0),
+                video_timestamp=data.get('video_timestamp', ''),
+                video_thumbnail_base64=data.get('video_thumbnail_base64', ''),
+                in_timestamp=data.get('in_timestamp'),
+                out_timestamp=data.get('out_timestamp'),
+                rating=data.get('rating', 0.0),
+                segments=data.get('segments')
             )
             
-            logger.info(f"Description saved to database for: {os.path.basename(video_path)}")
+            logger.info(f"Successfully imported to database: {data['filename']}")
             
         except Exception as e:
-            logger.error(f"Description generation error: {e}", exc_info=True)
+            logger.error(f"Error importing JSON to database: {e}", exc_info=True)
             raise
