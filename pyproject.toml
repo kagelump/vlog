@@ -16,6 +16,7 @@ dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
     "requests>=2.31.0",
+    "snakemake>=8.0.0",
 ]
 
 [project.optional-dependencies]

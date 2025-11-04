@@ -1,0 +1,42 @@
+# Snakemake Video Ingestion Configuration
+
+# SD Card mount point - adjust this to your SD card path
+sd_card_path: "/Volumes/SDCARD"
+
+# Output directories
+main_folder: "videos/main"
+preview_folder: "videos/preview"
+
+# Video file extensions to process
+video_extensions:
+  - "mp4"
+  - "MP4"
+  - "mov"
+  - "MOV"
+
+# Preview file settings
+preview_suffix: "_preview"
+preview_extension: "mp4"
+
+# FFmpeg settings for preview generation
+preview_settings:
+  # Scale to this width (height auto-calculated to maintain aspect ratio)
+  width: 1280
+  # Video codec
+  vcodec: "libx264"
+  # Constant Rate Factor (18-28, lower = better quality)
+  crf: 23
+  # Preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
+  preset: "medium"
+
+# Transcription settings
+transcribe:
+  model: "mlx-community/whisper-large-v3-turbo"
+  format: "srt"
+  task: "transcribe"
+
+# Describe settings
+describe:
+  model: "mlx-community/Qwen3-VL-8B-Instruct-4bit"
+  # FPS will be adaptive based on video length
+  max_pixels: 224

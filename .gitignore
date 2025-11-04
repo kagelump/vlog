@@ -50,6 +50,10 @@ extracted_clips.csv
 *.srt
 *_cleaned.srt
 
+# Snakemake workflow outputs
+videos/
+.snakemake/
+
 # Test coverage
 .coverage
 htmlcov/
