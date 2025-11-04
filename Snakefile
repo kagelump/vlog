@@ -74,6 +74,15 @@ VIDEOS = discover_videos()
 VIDEO_STEMS = [v["stem"] for v in VIDEOS]
 
 
+# Helper function to check if source and destination are the same
+def should_skip_copy(src, dst):
+    """Check if source and destination paths are the same (local mode)."""
+    from pathlib import Path
+    src_path = Path(src).resolve()
+    dst_path = Path(dst).resolve()
+    return src_path == dst_path
+
+
 # Rule: Process all videos
 rule all:
     input:
@@ -96,11 +105,8 @@ rule copy_main:
         
         os.makedirs(MAIN_FOLDER, exist_ok=True)
         
-        # Check if source and destination are the same
-        src_path = Path(input[0]).resolve()
-        dst_path = Path(output[0]).resolve()
-        
-        if src_path == dst_path:
+        # Check if source and destination are the same (local mode)
+        if should_skip_copy(input[0], output[0]):
             print(f"Source and destination are the same, skipping copy: {input[0]}")
         else:
             print(f"Copying main file: {input[0]} -> {output[0]}")
@@ -120,10 +126,7 @@ rule copy_or_create_preview:
         os.makedirs(PREVIEW_FOLDER, exist_ok=True)
         
         # Check if source and destination are the same (local mode)
-        src_path = Path(input.main).resolve()
-        dst_path = Path(output[0]).resolve()
-        
-        if src_path == dst_path:
+        if should_skip_copy(input.main, output[0]):
             print(f"Source and destination are the same (local mode), skipping copy: {input.main}")
         else:
             # Check if preview file exists on SD card

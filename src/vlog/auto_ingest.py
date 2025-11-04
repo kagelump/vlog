@@ -241,7 +241,8 @@ class AutoIngestService:
             video_path: Path to the video file.
             
         Returns:
-            Tuple of (success, json_output_path)
+            Tuple of (success: bool, json_output_path: str).
+            On failure, returns (False, "") with an empty string for the JSON path.
         """
         try:
             video_path_obj = Path(video_path).resolve()
@@ -317,8 +318,8 @@ class AutoIngestService:
                 # Clean up temporary config
                 try:
                     os.unlink(temp_config)
-                except:
-                    pass
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"Failed to cleanup temp config: {e}")
                     
         except subprocess.TimeoutExpired:
             logger.error(f"Snakemake pipeline timeout for: {video_path}")
