@@ -20,8 +20,8 @@ This is a video logging and analysis application that uses machine learning (MLX
 - Saves results directly to database
 - Best for ad-hoc processing of individual videos
 
-**2. Snakemake Pipeline (Snakefile)**
-- Orchestrated workflow for batch processing from SD cards
+**2. Snakemake Pipeline (staged)**
+- Orchestrated workflow split into 3 stage files under `src/ingest_pipeline/snakefiles/`
 - Steps: copy main → copy/create preview → transcribe → clean subtitles → describe → JSON output
 - Configuration-driven via config.yaml
 - Handles both SD card and local directory modes
@@ -231,9 +231,9 @@ The project uses Snakemake for orchestrating the video ingestion pipeline from S
 
 The pipeline has been split into 3 independent stages for better control:
 
-1. **Stage 1: Copy** (`Snakefile.copy`) - Copy main video files and create/copy preview files
-2. **Stage 2: Subtitles** (`Snakefile.subtitles`) - Generate and clean subtitle files  
-3. **Stage 3: Describe** (`Snakefile.describe`) - Analyze videos and save results to JSON
+1. **Stage 1: Copy** (`snakefiles/copy.smk`) - Copy main video files and create/copy preview files
+2. **Stage 2: Subtitles** (`snakefiles/subtitles.smk`) - Generate and clean subtitle files  
+3. **Stage 3: Describe** (`snakefiles/describe.smk`) - Analyze videos and save results to JSON
 
 **Master Workflow:**
 - `src/ingest_pipeline/Snakefile` - Orchestrates all 3 stages, can run them together or individually
@@ -241,13 +241,13 @@ The pipeline has been split into 3 independent stages for better control:
 
 **Running the workflow:**
 ```bash
-# Run all stages together
+# Run all stages together (master orchestrator)
 snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml
 
-# Run individual stages
-snakemake --snakefile src/ingest_pipeline/Snakefile.copy --cores 1 --configfile config.yaml
-snakemake --snakefile src/ingest_pipeline/Snakefile.subtitles --cores 1 --configfile config.yaml
-snakemake --snakefile src/ingest_pipeline/Snakefile.describe --cores 1 --configfile config.yaml
+# Run individual stages (now stored under src/ingest_pipeline/snakefiles)
+snakemake --snakefile src/ingest_pipeline/snakefiles/copy.smk --cores 1 --configfile config.yaml
+snakemake --snakefile src/ingest_pipeline/snakefiles/subtitles.smk --cores 1 --configfile config.yaml
+snakemake --snakefile src/ingest_pipeline/snakefiles/describe.smk --cores 1 --configfile config.yaml
 
 # Run specific stage from master file
 snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage1
@@ -397,10 +397,11 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - `src/vlog/davinci_clip_importer.py`: DaVinci Resolve integration script
 - `src/proto/describe.proto`: Protocol Buffers schema definition
 - `src/ingest_pipeline/`: Snakemake pipeline files and helper scripts
-  - `Snakefile`: Master workflow orchestrating all 3 stages
-  - `Snakefile.copy`: Stage 1 - Copy videos from SD card
-  - `Snakefile.subtitles`: Stage 2 - Generate and clean subtitles
-  - `Snakefile.describe`: Stage 3 - Describe videos using daemon
+    - `Snakefile`: Master workflow orchestrating all 3 stages
+    - `snakefiles/`: Directory containing stage-specific Snakemake files
+        - `copy.smk`: Stage 1 - Copy videos from SD card
+        - `subtitles.smk`: Stage 2 - Generate and clean subtitles
+        - `describe.smk`: Stage 3 - Describe videos using daemon
   - `create_preview.py`: Generate preview videos with ffmpeg
   - `describe_to_json.py`: Describe video via daemon and save to JSON
   - `discover_videos.py`: Discover video files on SD card
