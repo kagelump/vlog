@@ -45,24 +45,7 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
-        .script-card {
-            transition: all 0.2s;
-            border: 2px solid transparent;
-        }
-        .script-card:hover {
-            border-color: #6366f1;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        .script-card.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .script-card.disabled:hover {
-            border-color: transparent;
-            transform: none;
-            box-shadow: none;
-        }
+        /* Script launcher removed in this build; CSS for script cards omitted */
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
@@ -169,35 +152,7 @@
             </div>
         </div>
 
-        <!-- Script Launcher -->
-        <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Available Scripts</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="scripts-container">
-                <!-- Scripts will be loaded here dynamically -->
-            </div>
-        </div>
-
-        <!-- Console Output -->
-        <div class="bg-white shadow-lg rounded-xl p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-gray-800">Console Output</h2>
-                <div class="flex gap-2">
-                    <button 
-                        id="clear-console-btn"
-                        class="px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition">
-                        Clear
-                    </button>
-                    <button 
-                        id="stop-script-btn"
-                        class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled>
-                        Stop Script
-                    </button>
-                </div>
-            </div>
-            <div id="console-output" class="console-output"></div>
-        </div>
+        <!-- Script launcher removed; use Auto-Ingest and CLI scripts in the repo -->
 
         <!-- Quick Links -->
         <div class="mt-6 text-center">
@@ -272,10 +227,7 @@
         const setWorkingDirBtn = document.getElementById('set-working-dir-btn');
         const modelInput = document.getElementById('model-input');
         const fpsInput = document.getElementById('fps-input');
-        const scriptsContainer = document.getElementById('scripts-container');
-        const consoleOutput = document.getElementById('console-output');
-        const clearConsoleBtn = document.getElementById('clear-console-btn');
-        const stopScriptBtn = document.getElementById('stop-script-btn');
+    // Script-runner UI removed: related DOM elements are not used
         
         // Auto-ingest elements
         const autoIngestToggleBtn = document.getElementById('auto-ingest-toggle-btn');
@@ -333,180 +285,20 @@
                 workingDirInput.value = status.working_directory;
             }
             
-            // Update script cards
-            updateScriptCards();
+            // No script-runner; just update working directory display
         }
 
-        // Fetch and display status
+        // Fetch and display basic project info (working directory, version)
         async function fetchStatus() {
             try {
-                const response = await fetch('/api/launcher/status');
-                const status = await response.json();
-                updateStatus(status);
-            } catch (error) {
-                console.error('Failed to fetch status:', error);
-            }
-        }
-
-        // Fetch and display output
-        async function fetchOutput() {
-            try {
-                const response = await fetch(`/api/launcher/output?since=${lastTimestamp}`);
-                const data = await response.json();
-                
-                data.messages.forEach(msg => {
-                    if (msg.timestamp > lastTimestamp) {
-                        lastTimestamp = msg.timestamp;
-                        appendToConsole(msg);
-                    }
-                });
-                
-                // Auto-scroll to bottom
-                consoleOutput.scrollTop = consoleOutput.scrollHeight;
-            } catch (error) {
-                console.error('Failed to fetch output:', error);
-            }
-        }
-
-        // Append message to console
-        function appendToConsole(msg) {
-            const timestamp = new Date(msg.timestamp * 1000).toLocaleTimeString();
-            let line = '';
-            
-            if (msg.type === 'output') {
-                line = `[${timestamp}] ${msg.data}`;
-            } else if (msg.type === 'complete') {
-                line = `\n[${timestamp}] === Script completed with exit code ${msg.exit_code} ===\n`;
-            } else if (msg.type === 'error') {
-                line = `\n[${timestamp}] ERROR: ${msg.data}\n`;
-            }
-            
-            consoleOutput.textContent += line + '\n';
-        }
-
-        // Load available scripts
-        async function loadScripts() {
-            try {
-                const response = await fetch('/api/launcher/scripts');
-                const data = await response.json();
-                
-                scriptsContainer.innerHTML = '';
-                
-                data.scripts.forEach(script => {
-                    const card = createScriptCard(script);
-                    scriptsContainer.appendChild(card);
-                });
-            } catch (error) {
-                console.error('Failed to load scripts:', error);
-                scriptsContainer.innerHTML = '<p class="text-red-500">Failed to load scripts</p>';
-            }
-        }
-
-        // Create script card element
-        function createScriptCard(script) {
-            const card = document.createElement('div');
-            card.className = 'script-card bg-gradient-to-br from-indigo-50 to-white p-6 rounded-lg shadow cursor-pointer';
-            card.dataset.scriptName = script.name;
-            
-            const title = document.createElement('h3');
-            title.className = 'text-lg font-bold text-gray-800 mb-2';
-            title.textContent = script.name.replace('.sh', '');
-            
-            const description = document.createElement('p');
-            description.className = 'text-sm text-gray-600';
-            description.textContent = script.description || 'No description available';
-            
-            card.appendChild(title);
-            card.appendChild(description);
-            
-            card.addEventListener('click', () => runScript(script.name));
-            
-            return card;
-        }
-
-        // Update script cards (enable/disable based on running state)
-        function updateScriptCards() {
-            const cards = document.querySelectorAll('.script-card');
-            cards.forEach(card => {
-                if (isRunning) {
-                    card.classList.add('disabled');
-                } else {
-                    card.classList.remove('disabled');
+                const response = await fetch('/api/project-info');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
                 }
-            });
-        }
-
-        // Run a script
-        async function runScript(scriptName) {
-            if (isRunning) {
-                alert('A script is already running. Please wait for it to complete or stop it first.');
-                return;
-            }
-            
-            const args = [];
-            
-            // Add model and fps arguments for ingest script
-            if (scriptName === 'ingest.sh') {
-                const model = modelInput.value.trim();
-                const fps = fpsInput.value.trim();
-                
-                if (model) {
-                    args.push('--model', model);
-                }
-                if (fps) {
-                    args.push('--fps', fps);
-                }
-            }
-            
-            try {
-                consoleOutput.textContent += `\n=== Starting ${scriptName} ===\n\n`;
-                
-                const response = await fetch('/api/launcher/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        script: scriptName,
-                        args: args,
-                        working_dir: workingDirInput.value
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    // Start polling for output
-                    if (!pollInterval) {
-                        pollInterval = setInterval(() => {
-                            fetchOutput();
-                            fetchStatus();
-                        }, 500);
-                    }
-                } else {
-                    alert(`Failed to start script: ${result.message}`);
-                }
+                const info = await response.json();
+                updateStatus(info);
             } catch (error) {
-                console.error('Failed to run script:', error);
-                alert('Failed to run script. See console for details.');
-            }
-        }
-
-        // Stop currently running script
-        async function stopScript() {
-            try {
-                const response = await fetch('/api/launcher/stop', {
-                    method: 'POST'
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    consoleOutput.textContent += `\n=== Script stopped by user ===\n\n`;
-                } else {
-                    alert(`Failed to stop script: ${result.message}`);
-                }
-            } catch (error) {
-                console.error('Failed to stop script:', error);
-                alert('Failed to stop script. See console for details.');
+                console.error('Failed to fetch project info:', error);
             }
         }
 
@@ -520,7 +312,7 @@
             }
             
             try {
-                const response = await fetch('/api/launcher/set-working-dir', {
+                const response = await fetch('/api/set-working-dir', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ working_dir: workingDir })
@@ -542,9 +334,8 @@
             }
         }
 
-        // Clear console
+        // (console removed) helper stub
         function clearConsole() {
-            consoleOutput.textContent = '';
             lastTimestamp = 0;
         }
 
@@ -667,13 +458,13 @@
         }
 
         // Load directory contents
-        async function loadDirectory(path) {
+    async function loadDirectory(path) {
             browserLoading.classList.remove('hidden');
             browserError.classList.add('hidden');
             directoryItems.innerHTML = '';
             
             try {
-                const url = `/api/launcher/browse-directory${path ? '?path=' + encodeURIComponent(path) : ''}`;
+        const url = `/api/browse-directory${path ? '?path=' + encodeURIComponent(path) : ''}`;
                 const response = await fetch(url);
                 const data = await response.json();
                 
@@ -761,7 +552,7 @@
             try {
                 const workingDir = currentBrowserPath;
                 
-                const response = await fetch('/api/launcher/set-working-dir', {
+                const response = await fetch('/api/set-working-dir', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ working_dir: workingDir })

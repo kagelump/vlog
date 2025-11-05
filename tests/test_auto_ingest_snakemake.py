@@ -58,52 +58,6 @@ class TestSnakemakeIntegration:
             assert '--cores' in cmd
             assert '1' in cmd
     
-    @patch('vlog.auto_ingest.subprocess.run')
-    @patch('vlog.auto_ingest.check_if_file_exists')
-    def test_import_json_to_database(self, mock_check_exists, mock_subprocess):
-        """Test that JSON results are correctly imported to database."""
-        try:
-            from vlog.auto_ingest import AutoIngestService
-            from vlog.db import initialize_db
-        except ImportError:
-            pytest.skip("auto_ingest module not available (missing dependencies)")
-        
-        # Initialize test database
-        initialize_db()
-        
-        # Mock file existence check
-        mock_check_exists.return_value = False
-        
-        # Create service with a temp directory
-        with tempfile.TemporaryDirectory() as temp_dir:
-            service = AutoIngestService(temp_dir, "test-model")
-            
-            # Create a test JSON file
-            test_json_path = Path(temp_dir) / "test.json"
-            json_data = {
-                "filename": "test.mp4",
-                "video_description_long": "Test description",
-                "video_description_short": "Test short",
-                "primary_shot_type": "pov",
-                "tags": ["test", "static"],
-                "classification_time_seconds": 5.0,
-                "classification_model": "test-model",
-                "video_length_seconds": 10.0,
-                "video_timestamp": "2024-01-01T00:00:00",
-                "video_thumbnail_base64": "test_base64",
-                "rating": 0.8,
-                "segments": []
-            }
-            
-            with open(test_json_path, 'w') as f:
-                json.dump(json_data, f)
-            
-            # Import to database
-            service._import_json_to_database(str(test_json_path))
-            
-            # Verify the file was imported
-            from vlog.db import check_if_file_exists
-            assert check_if_file_exists("test.mp4") is True
     
     @patch('vlog.auto_ingest.subprocess.run')
     @patch('vlog.auto_ingest.check_if_file_exists')

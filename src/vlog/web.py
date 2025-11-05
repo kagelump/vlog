@@ -22,7 +22,6 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 app = Flask(__name__)
 # Use environment variable for secret key, or generate a random one for development
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(24).hex())
-DATABASE = 'video_results.db'
 STATIC_DIR = PROJECT_ROOT / 'static'
 
 # Configure logging only if not already configured

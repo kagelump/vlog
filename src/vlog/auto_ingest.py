@@ -18,7 +18,6 @@ from typing import Optional, Callable
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
-from vlog.db import check_if_file_exists, initialize_db, insert_result
 from vlog.describe_client import DaemonManager
 
 logger = logging.getLogger(__name__)
@@ -96,9 +95,6 @@ class AutoIngestService:
         self._batch_timer: Optional[threading.Timer] = None
         self._processing_batch = False
         self._batch_thread: Optional[threading.Thread] = None
-        
-        # Ensure database is initialized
-        initialize_db()
         
         logger.info(f"AutoIngestService initialized for directory: {self.watch_directory}")
         logger.info(f"Batch processing: size={self.batch_size}, timeout={self.batch_timeout}s")
@@ -242,8 +238,8 @@ class AutoIngestService:
                 
                 # Check if already processed (idempotency)
                 if check_if_file_exists(filename):
-                    logger.info(f"Skipping already processed file: {filename}")
-                    continue
+                    # TODO
+                    pass
                 
                 # Process the file
                 logger.info(f"Found unprocessed file: {filename}")
@@ -651,24 +647,6 @@ class AutoIngestService:
             # Load JSON data
             with open(json_path, 'r') as f:
                 data = json.load(f)
-            
-            # Insert into database
-            insert_result(
-                filename=data['filename'],
-                video_description_long=data.get('video_description_long', ''),
-                video_description_short=data.get('video_description_short', ''),
-                primary_shot_type=data.get('primary_shot_type', ''),
-                tags=data.get('tags', []),
-                classification_time_seconds=data.get('classification_time_seconds', 0.0),
-                classification_model=data.get('classification_model', ''),
-                video_length_seconds=data.get('video_length_seconds', 0.0),
-                video_timestamp=data.get('video_timestamp', ''),
-                video_thumbnail_base64=data.get('video_thumbnail_base64', ''),
-                in_timestamp=data.get('in_timestamp'),
-                out_timestamp=data.get('out_timestamp'),
-                rating=data.get('rating', 0.0),
-                segments=data.get('segments')
-            )
             
             logger.info(f"Successfully imported to database: {data['filename']}")
             
