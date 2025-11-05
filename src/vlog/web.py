@@ -385,6 +385,59 @@ def set_working_dir():
     return jsonify({'success': True, 'message': f'Working directory set to {working_dir}'})
 
 
+@app.route('/api/launcher/browse-directory', methods=['GET'])
+def browse_directory():
+    """Browse directories on the server"""
+    path = request.args.get('path', os.path.expanduser('~'))
+    
+    try:
+        # Normalize and validate the path
+        path = os.path.abspath(os.path.expanduser(path))
+        
+        # Security check: ensure path exists and is a directory
+        if not os.path.exists(path):
+            return jsonify({'success': False, 'message': 'Path does not exist'}), 400
+        
+        if not os.path.isdir(path):
+            return jsonify({'success': False, 'message': 'Path is not a directory'}), 400
+        
+        # Get directory contents
+        items = []
+        try:
+            for entry in sorted(os.listdir(path)):
+                entry_path = os.path.join(path, entry)
+                try:
+                    is_dir = os.path.isdir(entry_path)
+                    # Skip hidden files/directories starting with .
+                    if entry.startswith('.'):
+                        continue
+                    
+                    # Only include directories
+                    if is_dir:
+                        items.append({
+                            'name': entry,
+                            'path': entry_path,
+                            'is_directory': is_dir
+                        })
+                except (PermissionError, OSError):
+                    # Skip entries we can't access
+                    continue
+        except PermissionError:
+            return jsonify({'success': False, 'message': 'Permission denied'}), 403
+        
+        # Get parent directory
+        parent = os.path.dirname(path) if path != os.path.dirname(path) else None
+        
+        return jsonify({
+            'success': True,
+            'current_path': path,
+            'parent_path': parent,
+            'items': items
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/launcher/scripts', methods=['GET'])
 def list_scripts():
     """List available scripts."""
