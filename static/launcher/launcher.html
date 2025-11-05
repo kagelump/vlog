@@ -735,13 +735,7 @@
             
             // Automatically set the working directory in the backend
             try {
-                const workingDir = workingDirInput.value.trim();
-                
-                if (!workingDir) {
-                    alert('Please enter a working directory');
-                    workingDirInput.value = previousDir;
-                    return;
-                }
+                const workingDir = currentBrowserPath;
                 
                 const response = await fetch('/api/launcher/set-working-dir', {
                     method: 'POST',
