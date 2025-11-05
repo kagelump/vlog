@@ -173,41 +173,13 @@ def clean_subtitles(subtitles):
     return result
 
 
-def process_srt_files():
+def process_srt_file(filename):    
     """
-    The main function to load the model and process all SRT files in the directory.
+    Process a single SRT file: parse, clean, and reassemble.
     """
-    # Find all SRT files in the target directory
-    srt_files = [f for f in os.listdir(TARGET_DIRECTORY) if f.endswith(".srt") and not f.endswith(OUTPUT_SUFFIX)]
-
-    if not srt_files:
-        print(f"No original SRT files found in {TARGET_DIRECTORY} to process.")
-        return
-
-    print(f"Found {len(srt_files)} SRT files to clean.")
-
-    for filename in srt_files:
-        original_filepath = os.path.join(TARGET_DIRECTORY, filename)
-        cleaned_filepath = os.path.join(TARGET_DIRECTORY, filename.replace(".srt", OUTPUT_SUFFIX))
-        
-        print(f"\n--- Processing {filename} ---")
-        
-        # 1. Parse the entire file to get the structured list and the concatenated text
-        with open(original_filepath, 'r', encoding='utf-8') as f:
-            full_text_content = f.read()
-        
-        subtitles = parse_srt(original_filepath)
-
-        # 2. Clean the entire text block in one call
-        cleaned_subtitles = clean_subtitles(subtitles)
-
-        # 5. Write the cleaned data to a new file
-        with open(cleaned_filepath, 'w', encoding='utf-8') as f:
-            f.write(reassemble_srt(cleaned_subtitles))
-            
-        print(f"Successfully cleaned and saved to {cleaned_filepath}")
-        
-    print("\nAll files processed.")
+    subtitles = parse_srt(filename)
+    output = clean_subtitles(subtitles)
+    return reassemble_srt(output)
 
 if __name__ == "__main__":
     process_srt_files()

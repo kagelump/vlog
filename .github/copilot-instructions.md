@@ -228,22 +228,35 @@ The database schema is also defined in Protocol Buffers format in `src/proto/des
 The project uses Snakemake for orchestrating the video ingestion pipeline from SD cards or local directories.
 
 **Workflow Overview:**
-1. `copy_main` - Copy main video file from source to main folder
-2. `copy_or_create_preview` - Copy or create preview file using ffmpeg
-3. `transcribe` - Generate subtitles using mlx_whisper
-4. `clean_subtitles` - Clean subtitle files (remove duplicates and hallucinations)
-5. `describe` - Analyze video and save results to JSON
-6. `json_to_db` - Import JSON results to database (optional)
 
-**Configuration:**
-- Main config: `config.yaml` (SD card path, folders, model settings)
-- Workflow definition: `Snakefile`
-- Helper scripts in `scripts/` directory
+The pipeline has been split into 3 independent stages for better control:
+
+1. **Stage 1: Copy** (`Snakefile.copy`) - Copy main video files and create/copy preview files
+2. **Stage 2: Subtitles** (`Snakefile.subtitles`) - Generate and clean subtitle files  
+3. **Stage 3: Describe** (`Snakefile.describe`) - Analyze videos and save results to JSON
+
+**Master Workflow:**
+- `src/ingest_pipeline/Snakefile` - Orchestrates all 3 stages, can run them together or individually
+- Each stage can also be run independently using its own Snakefile
 
 **Running the workflow:**
 ```bash
-snakemake --cores 1 --configfile config.yaml
+# Run all stages together
+snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml
+
+# Run individual stages
+snakemake --snakefile src/ingest_pipeline/Snakefile.copy --cores 1 --configfile config.yaml
+snakemake --snakefile src/ingest_pipeline/Snakefile.subtitles --cores 1 --configfile config.yaml
+snakemake --snakefile src/ingest_pipeline/Snakefile.describe --cores 1 --configfile config.yaml
+
+# Run specific stage from master file
+snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage1
 ```
+
+**Configuration:**
+- Main config: `config.yaml` (SD card path, folders, model settings)
+- Workflow definitions: `src/ingest_pipeline/Snakefile*`
+- Helper scripts in `src/ingest_pipeline/` directory
 
 **Key Guidelines:**
 - Use Snakemake rules for pipeline steps, not standalone scripts when possible
@@ -252,6 +265,8 @@ snakemake --cores 1 --configfile config.yaml
 - Use `shell:` blocks for external commands
 - Configuration should be in config.yaml, not hardcoded
 - Handle both SD card and local directory modes (check if source == destination)
+- Import modules within `run:` blocks to avoid parse-time dependency issues
+- Each stage file has its own discovery function for flexibility
 
 ### Auto-Ingest Feature
 The auto-ingest feature monitors a directory for new video files and automatically processes them through the Snakemake pipeline.
@@ -381,12 +396,14 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - `src/vlog/srt_cleaner.py`: Subtitle file cleaning and processing
 - `src/vlog/davinci_clip_importer.py`: DaVinci Resolve integration script
 - `src/proto/describe.proto`: Protocol Buffers schema definition
-- `src/ingest_pipeline/`: Snakemake pipeline helper scripts
+- `src/ingest_pipeline/`: Snakemake pipeline files and helper scripts
+  - `Snakefile`: Master workflow orchestrating all 3 stages
+  - `Snakefile.copy`: Stage 1 - Copy videos from SD card
+  - `Snakefile.subtitles`: Stage 2 - Generate and clean subtitles
+  - `Snakefile.describe`: Stage 3 - Describe videos using daemon
   - `create_preview.py`: Generate preview videos with ffmpeg
-  - `describe_to_json.py`: Describe video and save to JSON
+  - `describe_to_json.py`: Describe video via daemon and save to JSON
   - `discover_videos.py`: Discover video files on SD card
-  - `transcribe.sh`: Video transcription
-  - `Snakefile`: Snakemake workflow definition
 - `config.yaml`: Main configuration file for Snakemake workflow
 - `scripts/`: Executable scripts for various operations
   - `ingest.sh`: Manual ingestion pipeline
@@ -397,7 +414,7 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - `static/index.html`: Frontend UI for results viewer
 - `static/launcher/launcher.html`: Frontend UI for launcher
 - `prompts/`: Model prompts in YAML and Markdown formats
-- `docs/`: Detailed documentation (AUTO_INGEST.md, SNAKEMAKE_WORKFLOW.md, etc.)
+- `docs/`: Detailed documentation (AUTO_INGEST.md, SNAKEMAKE_WORKFLOW.md, STAGED_WORKFLOW.md, etc.)
 - `tests/`: Test suite (pytest-based)
 
 ## Common Patterns
