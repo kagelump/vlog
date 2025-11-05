@@ -157,6 +157,7 @@ This is a video logging and analysis application that uses machine learning (MLX
 - Use `requests` for HTTP client operations
 - Use `pyyaml` for configuration file parsing
 - Use `protobuf` for schema definitions (describe.proto)
+- Use `jinja2` for prompt templating (in describe_lib.py)
 
 ### Package Management with UV
 - This project uses `uv` as the primary package manager
@@ -343,6 +344,7 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - Support both local model execution and describe daemon (FastAPI service)
 - Use `describe_client.py` for client-side API calls to the daemon
 - Use `describe_daemon.py` for running the description service
+- Prompts use Jinja2 templating for variable substitution (e.g., subtitle text, configuration values)
 
 ## Testing Requirements
 - Test database operations with various inputs
