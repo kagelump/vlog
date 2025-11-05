@@ -18,7 +18,8 @@ from typing import Optional, Callable
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
-from vlog.db import check_if_file_exists, initialize_db
+from vlog.db import check_if_file_exists, initialize_db, insert_result
+from vlog.describe_client import DaemonManager
 
 logger = logging.getLogger(__name__)
 
@@ -71,23 +72,36 @@ class VideoFileHandler(FileSystemEventHandler):
 class AutoIngestService:
     """Service for automatically ingesting new video files using Snakemake pipeline."""
     
-    def __init__(self, watch_directory: str, model_name: str = "mlx-community/Qwen3-VL-8B-Instruct-4bit"):
+    def __init__(self, watch_directory: str, model_name: str = "mlx-community/Qwen3-VL-8B-Instruct-4bit",
+                 batch_size: int = 5, batch_timeout: float = 60.0):
         """
         Initialize the auto-ingest service.
         
         Args:
             watch_directory: Directory to monitor for new video files.
             model_name: ML model to use for video description.
+            batch_size: Number of files to accumulate before processing (default: 5).
+            batch_timeout: Maximum seconds to wait before processing incomplete batch (default: 60).
         """
         self.watch_directory = os.path.abspath(watch_directory)
         self.model_name = model_name
         self.observer: Optional[Observer] = None
         self.is_running = False
         
+        # Batch processing configuration
+        self.batch_size = max(1, batch_size)
+        self.batch_timeout = max(1.0, batch_timeout)
+        self._batch_queue = []
+        self._batch_lock = threading.Lock()
+        self._batch_timer: Optional[threading.Timer] = None
+        self._processing_batch = False
+        self._batch_thread: Optional[threading.Thread] = None
+        
         # Ensure database is initialized
         initialize_db()
         
         logger.info(f"AutoIngestService initialized for directory: {self.watch_directory}")
+        logger.info(f"Batch processing: size={self.batch_size}, timeout={self.batch_timeout}s")
     
     def start(self) -> bool:
         """
@@ -136,11 +150,39 @@ class AutoIngestService:
             return False
         
         try:
+            # Stop the observer
             if self.observer:
                 self.observer.stop()
                 self.observer.join(timeout=5)
             
+            # Cancel any pending batch timer and get remaining files
+            batch_files = []
+            with self._batch_lock:
+                if self._batch_timer:
+                    self._batch_timer.cancel()
+                    self._batch_timer = None
+                
+                # Process any remaining files in the queue (synchronously for graceful shutdown)
+                if self._batch_queue and not self._processing_batch:
+                    logger.info(f"Processing {len(self._batch_queue)} remaining files before shutdown")
+                    # Process synchronously by calling worker directly (not in daemon thread)
+                    batch_files = self._batch_queue.copy()
+                    self._batch_queue.clear()
+                    self._processing_batch = True
+            
+            # Process the final batch synchronously (outside lock)
+            if batch_files:
+                self._process_batch_worker(batch_files)
+            
+            # Wait for any running batch thread to complete
+            if self._batch_thread and self._batch_thread.is_alive():
+                logger.info("Waiting for batch processing to complete...")
+                self._batch_thread.join(timeout=60)  # Wait up to 60 seconds
+                if self._batch_thread.is_alive():
+                    logger.warning("Batch processing did not complete within timeout")
+            
             self.is_running = False
+            self._processing_batch = False
             logger.info("Auto-ingest service stopped")
             return True
         except Exception as e:
@@ -154,10 +196,17 @@ class AutoIngestService:
         Returns:
             Dictionary with status information.
         """
+        with self._batch_lock:
+            batch_queue_size = len(self._batch_queue)
+        
         return {
             'is_running': self.is_running,
             'watch_directory': self.watch_directory,
-            'model_name': self.model_name
+            'model_name': self.model_name,
+            'batch_size': self.batch_size,
+            'batch_timeout': self.batch_timeout,
+            'queued_files': batch_queue_size,
+            'processing_batch': self._processing_batch
         }
     
     def _process_existing_files(self) -> None:
@@ -201,7 +250,7 @@ class AutoIngestService:
     
     def _process_video_file(self, file_path: str) -> None:
         """
-        Process a single video file through the Snakemake pipeline.
+        Add a video file to the batch queue for processing.
         
         This method is idempotent - it will skip files that have already been processed.
         
@@ -216,122 +265,257 @@ class AutoIngestService:
                 logger.info(f"File already processed, skipping: {filename}")
                 return
             
-            logger.info(f"Processing new video file: {filename}")
+            logger.info(f"Adding video file to batch queue: {filename}")
             
-            # Run Snakemake pipeline for this file
-            success, json_path = self._run_snakemake_pipeline(file_path)
-            
-            if not success:
-                logger.error(f"Snakemake pipeline failed for: {filename}")
-                return
-            
-            # Import JSON results to database
-            self._import_json_to_database(json_path)
-            
-            logger.info(f"Successfully processed: {filename}")
+            with self._batch_lock:
+                # Add to batch queue
+                self._batch_queue.append(file_path)
+                
+                # Cancel existing timer if present
+                if self._batch_timer:
+                    self._batch_timer.cancel()
+                    self._batch_timer = None
+                
+                # Check if batch is full
+                if len(self._batch_queue) >= self.batch_size:
+                    logger.info(f"Batch size reached ({self.batch_size}), processing batch")
+                    self._process_batch()
+                else:
+                    # Start timeout timer for incomplete batch
+                    logger.info(f"Batch has {len(self._batch_queue)}/{self.batch_size} files, "
+                              f"starting {self.batch_timeout}s timer")
+                    self._batch_timer = threading.Timer(self.batch_timeout, self._on_batch_timeout)
+                    self._batch_timer.start()
             
         except Exception as e:
-            logger.error(f"Error processing {filename}: {e}", exc_info=True)
+            logger.error(f"Error queueing {filename}: {e}", exc_info=True)
     
-    def _run_snakemake_pipeline(self, video_path: str) -> tuple[bool, str]:
+    def _on_batch_timeout(self) -> None:
+        """Called when the batch timeout expires."""
+        with self._batch_lock:
+            if self._batch_queue and not self._processing_batch:
+                logger.info(f"Batch timeout reached, processing {len(self._batch_queue)} queued files")
+                self._process_batch()
+    
+    def _process_batch(self) -> None:
         """
-        Run Snakemake pipeline for a single video file.
+        Process a batch of video files through the pipeline.
+        
+        This method should be called while holding _batch_lock.
+        It processes files in these stages:
+        1. Run Snakemake for preprocessing (transcribe, clean_subtitles) with parallelism
+        2. Start describe daemon
+        3. Use daemon to describe all videos in batch (model loaded once)
+        4. Import results to database
+        """
+        if not self._batch_queue:
+            return
+        
+        # Mark as processing and extract batch
+        self._processing_batch = True
+        batch_files = self._batch_queue.copy()
+        self._batch_queue.clear()
+        
+        # Cancel timer if present
+        if self._batch_timer:
+            self._batch_timer.cancel()
+            self._batch_timer = None
+        
+        # Process batch in a separate thread to avoid blocking
+        # Use a regular (non-daemon) thread so it can be properly joined on shutdown
+        self._batch_thread = threading.Thread(
+            target=self._process_batch_worker, 
+            args=(batch_files,),
+            daemon=False,
+            name="BatchProcessWorker"
+        )
+        self._batch_thread.start()
+    
+    def _process_batch_worker(self, batch_files: list[str]) -> None:
+        """
+        Worker thread to process a batch of files.
         
         Args:
-            video_path: Path to the video file.
-            
-        Returns:
-            Tuple of (success: bool, json_output_path: str).
-            On failure, returns (False, "") with an empty string for the JSON path.
+            batch_files: List of file paths to process.
         """
         try:
-            video_path_obj = Path(video_path).resolve()
-            video_dir = video_path_obj.parent
-            stem = video_path_obj.stem
-            extension = video_path_obj.suffix[1:] if video_path_obj.suffix else 'mp4'  # Default to mp4 if no extension
+            logger.info(f"Processing batch of {len(batch_files)} files")
             
-            # Create a temporary config file for this run
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-                config = {
-                    'sd_card_path': str(video_dir),
-                    'main_folder': str(video_dir),
-                    'preview_folder': str(video_dir),
-                    'video_extensions': [extension],
-                    'preview_suffix': '_preview',
-                    'preview_extension': extension,
-                    'preview_settings': {
-                        'width': 1280,
-                        'crf': 23,
-                        'preset': 'medium'
-                    },
-                    'transcribe': {
-                        'model': 'mlx-community/whisper-large-v3-turbo'
-                    },
-                    'describe': {
-                        'model': self.model_name,
-                        'max_pixels': 224
-                    }
-                }
-                yaml.dump(config, f)
-                temp_config = f.name
+            # Step 1: Run Snakemake for preprocessing stages (up to cleaned subtitles)
+            logger.info("Step 1: Running preprocessing (transcribe, clean_subtitles)")
+            preprocessed_files = self._run_batch_preprocessing(batch_files)
             
-            try:
-                # Path to Snakefile
-                snakefile = PROJECT_ROOT / 'Snakefile'
-                
-                if not snakefile.exists():
-                    logger.error(f"Snakefile not found at {snakefile}")
-                    return False, ""
-                
-                # Target: the final JSON file
-                json_target = str(video_dir / f"{stem}.json")
-                
-                # Run Snakemake
-                # Note: Snakemake >=8 requires an argument to --quiet (choices: all, host,
-                # progress, reason, rules). Passing --quiet without a value causes the
-                # next positional argument to be interpreted as the quiet-mode value.
-                # Use the explicit 'progress' quiet mode to reduce noise while keeping
-                # the target positional argument correctly parsed.
-                cmd = [
-                    'snakemake',
-                    '--snakefile', str(snakefile),
-                    '--configfile', temp_config,
-                    '--cores', '1',
-                    '--quiet', 'progress',
-                    json_target
-                ]
-                
-                logger.info(f"Running Snakemake pipeline for: {video_path_obj.name}")
-                result = subprocess.run(
-                    cmd,
-                    cwd=str(PROJECT_ROOT),
-                    capture_output=True,
-                    text=True,
-                    timeout=1800  # 30 minute timeout
-                )
-                
-                if result.returncode != 0:
-                    logger.error(f"Snakemake pipeline failed: {result.stderr}")
-                    if result.stdout:
-                        logger.error(f"Snakemake stdout: {result.stdout}")
-                    return False, ""
-                
-                logger.info(f"Snakemake pipeline completed for: {video_path_obj.name}")
-                return True, json_target
-                
-            finally:
-                # Clean up temporary config
+            if not preprocessed_files:
+                logger.error("Preprocessing failed for all files in batch")
+                return
+            
+            # Step 2: Use describe daemon to process all videos
+            logger.info(f"Step 2: Describing {len(preprocessed_files)} videos using daemon")
+            described_files = self._run_batch_describe(preprocessed_files)
+            
+            # Step 3: Import results to database
+            logger.info(f"Step 3: Importing {len(described_files)} results to database")
+            for json_path in described_files:
                 try:
-                    os.unlink(temp_config)
-                except OSError as e:
-                    logger.warning(f"Failed to cleanup temp config: {e}")
-                    
-        except subprocess.TimeoutExpired:
-            logger.error(f"Snakemake pipeline timeout for: {video_path}")
-            return False, ""
+                    self._import_json_to_database(json_path)
+                except Exception as e:
+                    logger.error(f"Failed to import {json_path}: {e}")
+            
+            logger.info(f"Batch processing complete: {len(described_files)}/{len(batch_files)} successful")
+            
         except Exception as e:
-            logger.error(f"Snakemake pipeline error: {e}")
-            return False, ""
+            logger.error(f"Error in batch processing: {e}", exc_info=True)
+        finally:
+            self._processing_batch = False
+    
+    def _run_batch_preprocessing(self, batch_files: list[str]) -> list[str]:
+        """
+        Run preprocessing stages (transcribe, clean_subtitles) for a batch of files.
+        
+        Args:
+            batch_files: List of video file paths.
+            
+        Returns:
+            List of successfully preprocessed file paths.
+        """
+        successful_files = []
+        
+        for video_path in batch_files:
+            try:
+                video_path_obj = Path(video_path).resolve()
+                video_dir = video_path_obj.parent
+                stem = video_path_obj.stem
+                extension = video_path_obj.suffix[1:] if video_path_obj.suffix else 'mp4'
+                
+                # Create a temporary config file for this run
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+                    config = {
+                        'sd_card_path': str(video_dir),
+                        'main_folder': str(video_dir),
+                        'preview_folder': str(video_dir),
+                        'video_extensions': [extension],
+                        'preview_suffix': '_preview',
+                        'preview_extension': extension,
+                        'preview_settings': {
+                            'width': 1280,
+                            'crf': 23,
+                            'preset': 'medium'
+                        },
+                        'transcribe': {
+                            'model': 'mlx-community/whisper-large-v3-turbo'
+                        },
+                        'describe': {
+                            'model': self.model_name,
+                            'max_pixels': 224
+                        }
+                    }
+                    yaml.dump(config, f)
+                    temp_config = f.name
+                
+                try:
+                    # Path to Snakefile
+                    snakefile = PROJECT_ROOT / 'Snakefile'
+                    
+                    if not snakefile.exists():
+                        logger.error(f"Snakefile not found at {snakefile}")
+                        continue
+                    
+                    # Target: cleaned subtitle file (stops before describe step)
+                    subtitle_target = str(video_dir / f"{stem}_cleaned.srt")
+                    
+                    # Run Snakemake for preprocessing only
+                    cmd = [
+                        'snakemake',
+                        '--snakefile', str(snakefile),
+                        '--configfile', temp_config,
+                        '--cores', '1',
+                        '--quiet', 'progress',
+                        subtitle_target
+                    ]
+                    
+                    logger.info(f"Preprocessing: {video_path_obj.name}")
+                    result = subprocess.run(
+                        cmd,
+                        cwd=str(PROJECT_ROOT),
+                        capture_output=True,
+                        text=True,
+                        timeout=1800  # 30 minute timeout
+                    )
+                    
+                    if result.returncode != 0:
+                        logger.error(f"Preprocessing failed for {video_path_obj.name}: {result.stderr}")
+                        continue
+                    
+                    successful_files.append(video_path)
+                    logger.info(f"Preprocessing complete: {video_path_obj.name}")
+                    
+                finally:
+                    # Clean up temporary config
+                    try:
+                        os.unlink(temp_config)
+                    except OSError as e:
+                        logger.warning(f"Failed to cleanup temp config: {e}")
+                        
+            except subprocess.TimeoutExpired:
+                logger.error(f"Preprocessing timeout for: {video_path}")
+            except Exception as e:
+                logger.error(f"Preprocessing error for {video_path}: {e}")
+        
+        return successful_files
+    
+    def _run_batch_describe(self, video_paths: list[str]) -> list[str]:
+        """
+        Use describe daemon to process a batch of videos.
+        
+        Args:
+            video_paths: List of preprocessed video file paths.
+            
+        Returns:
+            List of JSON output file paths for successfully described videos.
+        """
+        json_files = []
+        
+        # Create daemon manager
+        daemon_manager = DaemonManager(model=self.model_name)
+        
+        try:
+            # Start daemon (loads model once)
+            if not daemon_manager.start_daemon():
+                logger.error("Failed to start describe daemon")
+                return json_files
+            
+            # Process each video using the daemon
+            for video_path in video_paths:
+                try:
+                    video_path_obj = Path(video_path)
+                    
+                    # Describe the video
+                    description = daemon_manager.describe_video(
+                        video_path,
+                        fps=1.0,
+                        max_pixels=224 * 224
+                    )
+                    
+                    if not description:
+                        logger.error(f"Failed to describe: {video_path_obj.name}")
+                        continue
+                    
+                    # Save JSON output
+                    json_path = video_path_obj.with_suffix('.json')
+                    with open(json_path, 'w') as f:
+                        json.dump(description, f, indent=2)
+                    
+                    json_files.append(str(json_path))
+                    logger.info(f"Described: {video_path_obj.name}")
+                    
+                except Exception as e:
+                    logger.error(f"Error describing {video_path}: {e}", exc_info=True)
+            
+        finally:
+            # Stop the daemon
+            daemon_manager.stop_daemon()
+        
+        return json_files
     
     def _import_json_to_database(self, json_path: str) -> None:
         """
@@ -350,9 +534,6 @@ class AutoIngestService:
             # Load JSON data
             with open(json_path, 'r') as f:
                 data = json.load(f)
-            
-            # Import required function
-            from vlog.db import insert_result
             
             # Insert into database
             insert_result(

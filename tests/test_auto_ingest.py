@@ -3,7 +3,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, call
 import pytest
 import sys
 
@@ -99,6 +99,120 @@ class TestAutoIngestService:
         pass
 
 
+class TestBatchProcessing:
+    """Test batch processing functionality."""
+    
+    def test_batch_queue_initialization(self):
+        """Test that batch queue is properly initialized."""
+        try:
+            from vlog.auto_ingest import AutoIngestService
+        except ImportError:
+            pytest.skip("auto_ingest module not available (missing dependencies)")
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = AutoIngestService(tmpdir, batch_size=10, batch_timeout=30.0)
+            assert service.batch_size == 10
+            assert service.batch_timeout == 30.0
+            assert service._batch_queue == []
+            assert service._processing_batch is False
+    
+    def test_batch_size_minimum_validation(self):
+        """Test that batch size has a minimum value of 1."""
+        try:
+            from vlog.auto_ingest import AutoIngestService
+        except ImportError:
+            pytest.skip("auto_ingest module not available (missing dependencies)")
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Test with 0 - should be clamped to 1
+            service = AutoIngestService(tmpdir, batch_size=0)
+            assert service.batch_size == 1
+            
+            # Test with negative - should be clamped to 1
+            service = AutoIngestService(tmpdir, batch_size=-5)
+            assert service.batch_size == 1
+    
+    def test_batch_timeout_minimum_validation(self):
+        """Test that batch timeout has a minimum value of 1.0."""
+        try:
+            from vlog.auto_ingest import AutoIngestService
+        except ImportError:
+            pytest.skip("auto_ingest module not available (missing dependencies)")
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Test with 0 - should be clamped to 1.0
+            service = AutoIngestService(tmpdir, batch_timeout=0.0)
+            assert service.batch_timeout == 1.0
+            
+            # Test with negative - should be clamped to 1.0
+            service = AutoIngestService(tmpdir, batch_timeout=-10.0)
+            assert service.batch_timeout == 1.0
+    
+    def test_get_status_includes_batch_info(self):
+        """Test that get_status returns batch-related information."""
+        try:
+            from vlog.auto_ingest import AutoIngestService
+        except ImportError:
+            pytest.skip("auto_ingest module not available (missing dependencies)")
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            service = AutoIngestService(tmpdir, batch_size=5, batch_timeout=60.0)
+            status = service.get_status()
+            
+            assert 'batch_size' in status
+            assert status['batch_size'] == 5
+            assert 'batch_timeout' in status
+            assert status['batch_timeout'] == 60.0
+            assert 'queued_files' in status
+            assert status['queued_files'] == 0
+            assert 'processing_batch' in status
+            assert status['processing_batch'] is False
+    
+    @patch('vlog.auto_ingest.check_if_file_exists')
+    def test_process_video_file_adds_to_queue(self, mock_check_exists):
+        """Test that _process_video_file adds files to the batch queue."""
+        try:
+            from vlog.auto_ingest import AutoIngestService
+        except ImportError:
+            pytest.skip("auto_ingest module not available (missing dependencies)")
+        
+        mock_check_exists.return_value = False
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a dummy video file
+            video_file = os.path.join(tmpdir, "test.mp4")
+            Path(video_file).touch()
+            
+            service = AutoIngestService(tmpdir, batch_size=10, batch_timeout=60.0)
+            
+            # Process the file - should add to queue
+            service._process_video_file(video_file)
+            
+            # Check that file was added to queue
+            assert len(service._batch_queue) == 1
+            assert service._batch_queue[0] == video_file
+    
+    @patch('vlog.auto_ingest.check_if_file_exists')
+    def test_process_video_file_skips_existing(self, mock_check_exists):
+        """Test that _process_video_file skips already-processed files."""
+        try:
+            from vlog.auto_ingest import AutoIngestService
+        except ImportError:
+            pytest.skip("auto_ingest module not available (missing dependencies)")
+        
+        mock_check_exists.return_value = True  # File already exists
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_file = os.path.join(tmpdir, "test.mp4")
+            Path(video_file).touch()
+            
+            service = AutoIngestService(tmpdir, batch_size=10)
+            service._process_video_file(video_file)
+            
+            # Queue should remain empty
+            assert len(service._batch_queue) == 0
+
+
 class TestWebAPIEndpoints:
     """Test the auto-ingest API endpoints."""
     
@@ -125,6 +239,41 @@ class TestWebAPIEndpoints:
         """Test that the auto-ingest stop endpoint is accessible."""
         response = client.post('/api/auto-ingest/stop')
         assert response.status_code in [200, 400, 503]
+    
+    def test_auto_ingest_start_with_batch_params(self, client):
+        """Test that the auto-ingest start endpoint accepts batch parameters."""
+        response = client.post('/api/auto-ingest/start', 
+                              json={
+                                  'watch_directory': '/tmp',
+                                  'batch_size': 10,
+                                  'batch_timeout': 120.0
+                              })
+        # Should get 200 (started) or 503 (dependencies unavailable)
+        assert response.status_code in [200, 503]
+        
+        if response.status_code == 200:
+            data = response.get_json()
+            assert data.get('success') is True
+    
+    def test_auto_ingest_start_validates_batch_size(self, client):
+        """Test that invalid batch_size is validated."""
+        response = client.post('/api/auto-ingest/start', 
+                              json={
+                                  'watch_directory': '/tmp',
+                                  'batch_size': 'invalid'
+                              })
+        # Should get 400 (validation error) or 503 (dependencies unavailable)
+        assert response.status_code in [400, 503]
+    
+    def test_auto_ingest_start_validates_batch_timeout(self, client):
+        """Test that invalid batch_timeout is validated."""
+        response = client.post('/api/auto-ingest/start', 
+                              json={
+                                  'watch_directory': '/tmp',
+                                  'batch_timeout': 'invalid'
+                              })
+        # Should get 400 (validation error) or 503 (dependencies unavailable)
+        assert response.status_code in [400, 503]
 
 
 if __name__ == '__main__':
