@@ -728,9 +728,11 @@
         }
 
         // Select current directory
-        function selectCurrentDirectory() {
+        async function selectCurrentDirectory() {
             workingDirInput.value = currentBrowserPath;
             closeDirectoryBrowser();
+            // Automatically set the working directory in the backend
+            await setWorkingDirectory();
         }
 
         // Event listeners
