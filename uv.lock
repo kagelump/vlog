@@ -2877,7 +2877,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.31.0" },
-    { name = "snakemake", specifier = ">=8.0.0" },
+    { name = "snakemake", specifier = ">=9.0.0" },
     { name = "torch", specifier = ">=2.9.0" },
     { name = "torch-vision", specifier = ">=0.1.6.dev0" },
     { name = "torchvision", specifier = ">=0.24.0" },
