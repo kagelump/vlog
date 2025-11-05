@@ -386,7 +386,7 @@ The launcher UI provides a web-based interface for running scripts and managing 
   - `describe_to_json.py`: Describe video and save to JSON
   - `discover_videos.py`: Discover video files on SD card
   - `transcribe.sh`: Video transcription
-- `Snakefile`: Snakemake workflow definition
+  - `Snakefile`: Snakemake workflow definition
 - `config.yaml`: Main configuration file for Snakemake workflow
 - `scripts/`: Executable scripts for various operations
   - `ingest.sh`: Manual ingestion pipeline
