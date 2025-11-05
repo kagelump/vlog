@@ -94,10 +94,11 @@ def run_snakemake_for_file(
             '--configfile', temp_config,
             '--cores', '1',
             '--quiet', 'progress',  # Reduce output noise
+            '--',
             json_target
         ]
         
-        print(f"Running Snakemake for: {video_path.name}")
+        print(f"Running Snakemake for: {video_path.name}: {cmd}")
         result = subprocess.run(
             cmd,
             cwd=str(project_root),
