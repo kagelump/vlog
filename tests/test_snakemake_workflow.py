@@ -34,7 +34,7 @@ class TestDiscoverVideos(unittest.TestCase):
     
     def test_discover_videos_with_preview(self):
         """Test discovering videos with preview files."""
-        script_path = Path(__file__).parent.parent / "scripts" / "discover_videos.py"
+        script_path = Path(__file__).parent.parent / "src" / "ingest_pipeline" / "discover_videos.py"
         
         import subprocess
         result = subprocess.run(
@@ -78,7 +78,7 @@ class TestCreatePreview(unittest.TestCase):
     
     def test_create_preview_validates_input(self):
         """Test that create_preview validates input file exists."""
-        script_path = Path(__file__).parent.parent / "scripts" / "create_preview.py"
+        script_path = Path(__file__).parent.parent / "src" / "ingest_pipeline" / "create_preview.py"
         
         import subprocess
         result = subprocess.run(
@@ -102,7 +102,7 @@ class TestDescribeToJson(unittest.TestCase):
     
     def test_script_exists_and_executable(self):
         """Test that the script exists and is executable."""
-        script_path = Path(__file__).parent.parent / "scripts" / "describe_to_json.py"
+        script_path = Path(__file__).parent.parent / "src" / "ingest_pipeline" / "describe_to_json.py"
         
         self.assertTrue(script_path.exists())
         # Check it's a Python script
@@ -112,7 +112,7 @@ class TestDescribeToJson(unittest.TestCase):
     
     def test_describe_to_json_usage(self):
         """Test that script shows usage when called without args."""
-        script_path = Path(__file__).parent.parent / "scripts" / "describe_to_json.py"
+        script_path = Path(__file__).parent.parent / "src" / "ingest_pipeline" / "describe_to_json.py"
         
         import subprocess
         result = subprocess.run(

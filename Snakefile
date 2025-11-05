@@ -52,7 +52,7 @@ DESCRIBE_MAX_PIXELS = DESCRIBE.get("max_pixels", 224)
 # Discover videos on SD card
 def discover_videos():
     """Discover video files on the SD card."""
-    script_path = "scripts/discover_videos.py"
+    script_path = "src/ingest_pipeline/discover_videos.py"
     extensions_json = json.dumps(VIDEO_EXTENSIONS)
     
     cmd = ["python3", script_path, SD_CARD, extensions_json, PREVIEW_SUFFIX]
@@ -142,7 +142,7 @@ rule copy_or_create_preview:
                 print(f"Creating preview file from: {input.main}")
                 cmd = [
                     "python3",
-                    "scripts/create_preview.py",
+                    "src/ingest_pipeline/create_preview.py",
                     input.main,
                     output[0],
                     str(PREVIEW_WIDTH),
@@ -206,7 +206,7 @@ rule describe:
         max_pixels=DESCRIBE_MAX_PIXELS
     shell:
         """
-        python3 scripts/describe_to_json.py "{input.video}" "{input.subtitle}" "{output}" "{params.model}" 1.0 {params.max_pixels}
+        python3 src/ingest_pipeline/describe_to_json.py "{input.video}" "{input.subtitle}" "{output}" "{params.model}" 1.0 {params.max_pixels}
         """
 
 

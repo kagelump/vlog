@@ -377,28 +377,28 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - `src/vlog/describe_daemon.py`: FastAPI service for video description
 - `src/vlog/describe_client.py`: Client for communicating with describe daemon
 - `src/vlog/web.py`: Flask application and API endpoints (legacy results viewer)
-- `src/vlog/launcher.py`: Web UI launcher for script execution
-- `src/vlog/launcher_utils.py`: Utilities for launcher (directory browsing, etc.)
 - `src/vlog/auto_ingest.py`: Automated video monitoring and ingestion
 - `src/vlog/srt_cleaner.py`: Subtitle file cleaning and processing
 - `src/vlog/davinci_clip_importer.py`: DaVinci Resolve integration script
 - `src/proto/describe.proto`: Protocol Buffers schema definition
+- `src/ingest_pipeline/`: Snakemake pipeline helper scripts
+  - `create_preview.py`: Generate preview videos with ffmpeg
+  - `describe_to_json.py`: Describe video and save to JSON
+  - `discover_videos.py`: Discover video files on SD card
+  - `transcribe.sh`: Video transcription
 - `Snakefile`: Snakemake workflow definition
 - `config.yaml`: Main configuration file for Snakemake workflow
 - `scripts/`: Executable scripts for various operations
   - `ingest.sh`: Manual ingestion pipeline
-  - `transcribe.sh`: Video transcription
   - `launch_web.sh`: Start web UI launcher
   - `run_snakemake.sh`: Run Snakemake workflow
-  - `create_preview.py`: Generate preview videos with ffmpeg
-  - `describe_to_json.py`: Describe video and save to JSON
-  - `discover_videos.py`: Discover video files on SD card
+  - `setup_davinci_config.sh`: DaVinci Resolve configuration setup
+  - `verify_snakemake_env.py`: Verify Snakemake environment
 - `static/index.html`: Frontend UI for results viewer
 - `static/launcher/launcher.html`: Frontend UI for launcher
 - `prompts/`: Model prompts in YAML and Markdown formats
 - `docs/`: Detailed documentation (AUTO_INGEST.md, SNAKEMAKE_WORKFLOW.md, etc.)
 - `tests/`: Test suite (pytest-based)
-- Database modules should be imported and used, not duplicated
 
 ## Common Patterns
 
