@@ -287,12 +287,17 @@ class AutoIngestService:
                 json_target = str(video_dir / f"{stem}.json")
                 
                 # Run Snakemake
+                # Note: Snakemake >=8 requires an argument to --quiet (choices: all, host,
+                # progress, reason, rules). Passing --quiet without a value causes the
+                # next positional argument to be interpreted as the quiet-mode value.
+                # Use the explicit 'progress' quiet mode to reduce noise while keeping
+                # the target positional argument correctly parsed.
                 cmd = [
                     'snakemake',
                     '--snakefile', str(snakefile),
                     '--configfile', temp_config,
                     '--cores', '1',
-                    '--quiet',
+                    '--quiet', 'progress',
                     json_target
                 ]
                 

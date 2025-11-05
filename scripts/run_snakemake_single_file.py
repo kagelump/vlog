@@ -85,12 +85,15 @@ def run_snakemake_for_file(
         json_target = f"{video_dir}/{stem}.json"
         
         # Run Snakemake with the specific target
+        # Use explicit quiet-mode argument for Snakemake >=8 ('progress' is a
+        # supported choice) so the json_target is not mistaken for the quiet
+        # flag value.
         cmd = [
             'snakemake',
             '--snakefile', str(snakefile),
             '--configfile', temp_config,
             '--cores', '1',
-            '--quiet',  # Reduce output noise
+            '--quiet', 'progress',  # Reduce output noise
             json_target
         ]
         
