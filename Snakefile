@@ -206,7 +206,7 @@ rule describe:
         max_pixels=DESCRIBE_MAX_PIXELS
     shell:
         """
-        python3 scripts/describe_to_json.py {input.video} {input.subtitle} {output} {params.model} 1.0 {params.max_pixels}
+        python3 scripts/describe_to_json.py "{input.video}" "{input.subtitle}" "{output}" "{params.model}" 1.0 {params.max_pixels}
         """
 
 

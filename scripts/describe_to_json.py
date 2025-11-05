@@ -33,6 +33,10 @@ def describe_to_json(
     output_json: str,
     model_name: str = "mlx-community/Qwen3-VL-8B-Instruct-4bit",
     fps: float = 1.0,
+    # `max_pixels` may be provided as either a side length (e.g. 224) or
+    # as a total pixel budget (e.g. 224*224). The downstream mlx_vlm
+    # implementation expects a pixel budget; if callers pass a small
+    # integer like 224 we treat that as the side length and square it.
     max_pixels: int = 224,
     prompt: str | None = None
 ) -> bool:
@@ -82,6 +86,13 @@ def describe_to_json(
         
         # Describe the video
         print(f"Describing video: {video_file}")
+        # Convert small max_pixels (commonly provided as a side length)
+        # to a pixel budget expected by mlx_vlm. If the user passed a
+        # reasonably large value we assume it's already a pixel budget.
+        mp = int(max_pixels)
+        if mp > 0 and mp < 1000:
+            mp = mp * mp
+
         description = describe_video(
             video_path=str(video_path),
             model=model,
@@ -89,15 +100,16 @@ def describe_to_json(
             config=config,
             prompt=prompt,
             fps=local_fps,
-            max_pixels=max_pixels,
+            max_pixels=mp,
             subtitle_text=subtitle_text,
         )
         
         # Validate the output
         validated_desc = validate_model_output(description)
-        
-        # Get video thumbnail
-        thumbnail_base64 = get_video_thumbnail(str(video_path))
+
+        # Get video thumbnail (use thumbnail_frame from model output if present)
+        thumbnail_frame = validated_desc.get("thumbnail_frame", 0)
+        thumbnail_base64 = get_video_thumbnail(str(video_path), thumbnail_frame)
         
         # Calculate processing time
         classification_time = time.time() - start_time
