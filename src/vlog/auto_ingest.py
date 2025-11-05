@@ -18,7 +18,8 @@ from typing import Optional, Callable
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
-from vlog.db import check_if_file_exists, initialize_db
+from vlog.db import check_if_file_exists, initialize_db, insert_result
+from vlog.describe_client import DaemonManager
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,7 @@ class AutoIngestService:
         self._batch_lock = threading.Lock()
         self._batch_timer: Optional[threading.Timer] = None
         self._processing_batch = False
+        self._batch_thread: Optional[threading.Thread] = None
         
         # Ensure database is initialized
         initialize_db()
@@ -153,18 +155,34 @@ class AutoIngestService:
                 self.observer.stop()
                 self.observer.join(timeout=5)
             
-            # Cancel any pending batch timer
+            # Cancel any pending batch timer and get remaining files
+            batch_files = []
             with self._batch_lock:
                 if self._batch_timer:
                     self._batch_timer.cancel()
                     self._batch_timer = None
                 
-                # Process any remaining files in the queue
+                # Process any remaining files in the queue (synchronously for graceful shutdown)
                 if self._batch_queue and not self._processing_batch:
                     logger.info(f"Processing {len(self._batch_queue)} remaining files before shutdown")
-                    self._process_batch()
+                    # Process synchronously by calling worker directly (not in daemon thread)
+                    batch_files = self._batch_queue.copy()
+                    self._batch_queue.clear()
+                    self._processing_batch = True
+            
+            # Process the final batch synchronously (outside lock)
+            if batch_files:
+                self._process_batch_worker(batch_files)
+            
+            # Wait for any running batch thread to complete
+            if self._batch_thread and self._batch_thread.is_alive():
+                logger.info("Waiting for batch processing to complete...")
+                self._batch_thread.join(timeout=60)  # Wait up to 60 seconds
+                if self._batch_thread.is_alive():
+                    logger.warning("Batch processing did not complete within timeout")
             
             self.is_running = False
+            self._processing_batch = False
             logger.info("Auto-ingest service stopped")
             return True
         except Exception as e:
@@ -304,8 +322,14 @@ class AutoIngestService:
             self._batch_timer = None
         
         # Process batch in a separate thread to avoid blocking
-        thread = threading.Thread(target=self._process_batch_worker, args=(batch_files,), daemon=True)
-        thread.start()
+        # Use a regular (non-daemon) thread so it can be properly joined on shutdown
+        self._batch_thread = threading.Thread(
+            target=self._process_batch_worker, 
+            args=(batch_files,),
+            daemon=False,
+            name="BatchProcessWorker"
+        )
+        self._batch_thread.start()
     
     def _process_batch_worker(self, batch_files: list[str]) -> None:
         """
@@ -449,9 +473,6 @@ class AutoIngestService:
         Returns:
             List of JSON output file paths for successfully described videos.
         """
-        # Import describe client
-        from vlog.describe_client import DaemonManager
-        
         json_files = []
         
         # Create daemon manager
@@ -513,9 +534,6 @@ class AutoIngestService:
             # Load JSON data
             with open(json_path, 'r') as f:
                 data = json.load(f)
-            
-            # Import required function
-            from vlog.db import insert_result
             
             # Insert into database
             insert_result(
