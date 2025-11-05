@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, g
 
+from vlog.launcher_utils import browse_server_directory
+
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
@@ -202,6 +204,12 @@ def create_launcher_app():
         
         executor.working_directory = working_dir
         return jsonify({'success': True, 'message': f'Working directory set to {working_dir}'})
+    
+    @app.route('/api/launcher/browse-directory', methods=['GET'])
+    def browse_directory():
+        """Browse directories on the server"""
+        path = request.args.get('path')
+        return browse_server_directory(path)
     
     @app.route('/api/launcher/scripts', methods=['GET'])
     def list_scripts():
