@@ -538,10 +538,10 @@ def start_auto_ingest():
     try:
         batch_size = max(1, int(batch_size))
         batch_timeout = max(1.0, float(batch_timeout))
-    except (TypeError, ValueError) as e:
+    except (TypeError, ValueError):
         return jsonify({
             'success': False,
-            'message': f'Invalid batch parameters: {e}'
+            'message': 'Invalid batch parameters: batch_size must be an integer and batch_timeout must be a number'
         }), 400
     
     # Check if service is already running
