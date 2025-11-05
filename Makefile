@@ -12,6 +12,8 @@ JSON_SCHEMA_OUT := src/proto/describe.schema.json
 
 test:
 	@echo "Running tests with uv..."
+	@# Ensure workspace DB is removed to avoid stale state from previous runs
+	@rm -f video_results.db || true
 	@uv run -- pytest
 
 check-protoc:

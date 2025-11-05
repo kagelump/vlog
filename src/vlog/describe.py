@@ -16,6 +16,16 @@ from vlog.describe_lib import (
     DescribeOutput,
     validate_model_output,
 )
+# Re-export prompt helpers and defaults from describe_lib for backwards compatibility
+from vlog.describe_lib import (
+    DEFAULT_PROMPT_PATH,
+    load_prompt_template,
+    render_prompt,
+)
+# Re-export helpers used by tests/other modules
+from vlog.describe_lib import process_vision_info
+from vlog.describe_lib import generate
+from vlog.describe_lib import mx
 from vlog.video import get_video_length_and_timestamp, save_video_thumbnail_to_file
 
 

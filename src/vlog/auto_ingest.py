@@ -501,6 +501,84 @@ class AutoIngestService:
                 logger.error(f"Preprocessing error for {video_path}: {e}")
         
         return successful_files
+
+    def _run_snakemake_pipeline(self, video_path: str) -> tuple[bool, str | None]:
+        """
+        Run Snakemake preprocessing for a single video and return (success, json_path).
+
+        This helper creates a temporary config file and invokes snakemake with --configfile.
+        Returns True and the expected JSON output path on success, otherwise False, None.
+        """
+        try:
+            video_path_obj = Path(video_path).resolve()
+            video_dir = video_path_obj.parent
+            stem = video_path_obj.stem
+            extension = video_path_obj.suffix[1:] if video_path_obj.suffix else 'mp4'
+
+            # Create temporary config file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+                config = {
+                    'sd_card_path': str(video_dir),
+                    'main_folder': str(video_dir),
+                    'preview_folder': str(video_dir),
+                    'video_extensions': [extension],
+                    'preview_suffix': '_preview',
+                    'preview_extension': extension,
+                    'preview_settings': {
+                        'width': 1280,
+                        'crf': 23,
+                        'preset': 'medium'
+                    },
+                    'transcribe': {'model': 'mlx-community/whisper-large-v3-turbo'},
+                    'describe': {'model': self.model_name, 'max_pixels': 224}
+                }
+                yaml.dump(config, f)
+                temp_config = f.name
+
+            try:
+                snakefile = PROJECT_ROOT / 'Snakefile'
+                if not snakefile.exists():
+                    logger.error(f"Snakefile not found at {snakefile}")
+                    return False, None
+
+                # Target: cleaned subtitle (pre-describe target)
+                subtitle_target = str(video_dir / f"{stem}_cleaned.srt")
+
+                cmd = [
+                    'snakemake',
+                    '--snakefile', str(snakefile),
+                    '--configfile', temp_config,
+                    '--cores', '1',
+                    '--quiet', 'progress',
+                    '--',
+                    subtitle_target,
+                ]
+
+                logger.info(f"Running snakemake preprocessing for: {video_path_obj.name}")
+                result = subprocess.run(
+                    cmd,
+                    cwd=str(PROJECT_ROOT),
+                    capture_output=True,
+                    text=True,
+                    timeout=1800,
+                )
+
+                if result.returncode != 0:
+                    logger.error(f"Preprocessing failed for {video_path_obj.name}: {result.stderr}")
+                    return False, None
+
+                # Assume the describe output JSON will be next to the video with .json suffix
+                json_path = str(video_path_obj.with_suffix('.json'))
+                return True, json_path
+            finally:
+                try:
+                    os.unlink(temp_config)
+                except OSError:
+                    pass
+
+        except Exception as e:
+            logger.error(f"Error running snakemake pipeline: {e}")
+            return False, None
     
     def _run_batch_describe(self, video_paths: list[str]) -> list[str]:
         """
