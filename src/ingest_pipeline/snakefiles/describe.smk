@@ -41,40 +41,24 @@ DESCRIBE_FPS = DESCRIBE.get("fps", 1.0)
 # Daemon settings
 DAEMON_HOST = config.get("daemon_host", "127.0.0.1")
 DAEMON_PORT = config.get("daemon_port", 5555)
+DAEMON_WATCH_FILE = config.get("daemon_watch_file", "daemon_watch.txt")
 
-
-# Discover existing preview videos with cleaned subtitles
+# If there are cleaned subtitle files, it is ready for this stage.
 def discover_videos_with_subtitles():
-    """
-    Discover preview videos that have cleaned subtitle files.
-    
-    Returns:
-        list: Video stems (filenames without extension or suffix)
-    """
-    subtitle_pattern = f"{PREVIEW_FOLDER}/*_cleaned.srt"
-    subtitle_files = glob.glob(subtitle_pattern)
-    # Extract stem by removing _cleaned.srt suffix
-    stems = [Path(f).stem.replace("_cleaned", "") for f in subtitle_files]
-    return stems
+    return glob_wildcards(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt").stem
 
-
-# Get list of video stems
-VIDEO_STEMS = discover_videos_with_subtitles()
-
-
-# Default rule - describe all videos
 rule all:
     input:
-        expand(f"{PREVIEW_FOLDER}/{{stem}}.json", stem=VIDEO_STEMS)
-    message:
-        "Completed describing {input} videos"
+        expand(f"{PREVIEW_FOLDER}/{{stem}}.json", stem=discover_videos_with_subtitles())
 
+localrules: start_daemon, stop_daemon
 
-# Describe video and save results to JSON
 rule describe:
+    threads: 1
     input:
-        video=f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}",
+        video=f"{PREVIEW_FOLDER}/{{stem}}.mp4",
         subtitle=f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt"
+        daemon_watch=DAEMON_WATCH_FILE
     output:
         f"{PREVIEW_FOLDER}/{{stem}}.json"
     params:

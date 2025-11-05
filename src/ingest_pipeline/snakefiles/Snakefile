@@ -100,6 +100,23 @@ rule stage2:
     input:
         expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}_cleaned.srt", stem=discover_preview_videos())
 
+localrules: start_daemon, stop_daemon
+
+rule start_daemon:
+    input:
+        "config/daemon_config.yml",
+        # Depend on all of stage 2 output.
+        expand(
+            f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}_cleaned.srt", 
+            stem=discover_preview_videos() 
+        )
+    output:
+        temp("status/daemon_running.signal")
+    log:
+        "logs/daemon_start.log"
+    shell:
+        "uv {DAEMON_START_SCRIPT} {output} > {log} 2>&1"
+
 
 rule stage3:
     """Run only Stage 3: Describe videos"""
