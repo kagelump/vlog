@@ -299,8 +299,19 @@ def get_thumbnail_file(filename):
     Serves the thumbnail JPG file for a specific video filename.
     
     This is the preferred method for getting thumbnails (vs base64 from database).
+    
+    Security: This function implements defense-in-depth against path traversal:
+    1. Validates filename doesn't contain path separators or '..'
+    2. Uses Path.resolve() to get canonical absolute path
+    3. Verifies resolved path is within the working directory
+    4. Flask routing provides additional protection
     """
     try:
+        # Validate filename to prevent path traversal
+        # CodeQL may flag this, but we have multiple layers of protection
+        if not filename or '/' in filename or '\\' in filename or '..' in filename:
+            return jsonify({'success': False, 'message': 'Invalid filename'}), 400
+        
         # Import here to avoid circular dependencies
         from vlog.video import get_thumbnail_path_for_video
         
@@ -312,11 +323,12 @@ def get_thumbnail_file(filename):
         thumbnail_path_str = get_thumbnail_path_for_video(str(video_path))
         thumbnail_path = Path(thumbnail_path_str).resolve()
         
-        # Ensure the thumbnail path is within the working directory
+        # Ensure the thumbnail path is within the working directory (defense in depth)
         try:
             thumbnail_path.relative_to(base_dir)
         except ValueError:
             # Attempted path traversal or outside of working directory
+            logger.warning(f"Path traversal attempt blocked for filename: {filename}")
             return jsonify({'success': False, 'message': 'Invalid file path'}), 400
         
         # Check if thumbnail file exists
@@ -327,8 +339,9 @@ def get_thumbnail_file(filename):
         return send_from_directory(str(thumbnail_path.parent), thumbnail_path.name, mimetype='image/jpeg')
         
     except Exception as e:
-        logger.exception(f"Error serving thumbnail for {filename}: {e}")
-        return jsonify({'success': False, 'message': f'Error serving thumbnail: {str(e)}'}), 500
+        logger.exception(f"Error serving thumbnail for {filename}")
+        # Don't expose internal error details to the client
+        return jsonify({'success': False, 'message': 'Error serving thumbnail'}), 500
 
 
 # --- Routes: Data Modification ---
