@@ -8,6 +8,12 @@ JSON_SCHEMA_OUT := src/proto/describe.schema.json
 
 .PHONY: check-protoc proto proto-stub clean-proto
 
+.PHONY: test
+
+test:
+	@echo "Running tests with uv..."
+	@uv run -- pytest
+
 check-protoc:
 	@if [ -z "$(PROTOC)" ]; then \
 		echo ""; \

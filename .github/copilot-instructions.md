@@ -357,8 +357,10 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - Test DaVinci Resolve integration (if DaVinci is available)
 - Use pytest as the testing framework
 - Use fixtures from `tests/conftest.py` for database and file setup
-- Run tests with: `uv run -- pytest tests/ -v`
-- Check coverage with: `uv run -- pytest tests/ --cov=src/vlog`
+ - Use fixtures from `tests/conftest.py` for database and file setup
+ - Run tests with: `uv run -- pytest tests/ -v`
+     - A convenience Makefile target is available: `make test` (runs `uv run -- pytest`).
+ - Check coverage with: `uv run -- pytest tests/ --cov=src/vlog`
 
 ## Documentation Standards
 - Add clear docstrings to all functions

@@ -155,31 +155,34 @@ class AutoIngestService:
                 self.observer.stop()
                 self.observer.join(timeout=5)
             
-            # Cancel any pending batch timer and get remaining files
-            batch_files = []
+            # Cancel any pending batch timer
             with self._batch_lock:
                 if self._batch_timer:
                     self._batch_timer.cancel()
                     self._batch_timer = None
-                
-                # Process any remaining files in the queue (synchronously for graceful shutdown)
-                if self._batch_queue and not self._processing_batch:
-                    logger.info(f"Processing {len(self._batch_queue)} remaining files before shutdown")
-                    # Process synchronously by calling worker directly (not in daemon thread)
-                    batch_files = self._batch_queue.copy()
-                    self._batch_queue.clear()
-                    self._processing_batch = True
-            
-            # Process the final batch synchronously (outside lock)
-            if batch_files:
-                self._process_batch_worker(batch_files)
-            
-            # Wait for any running batch thread to complete
+
+            # If a batch worker thread is running, wait for it to finish so we have exclusive shutdown ordering
             if self._batch_thread and self._batch_thread.is_alive():
                 logger.info("Waiting for batch processing to complete...")
                 self._batch_thread.join(timeout=60)  # Wait up to 60 seconds
                 if self._batch_thread.is_alive():
                     logger.warning("Batch processing did not complete within timeout")
+
+            # If any files remain in the queue after the worker finished, process them synchronously now
+            remaining = []
+            with self._batch_lock:
+                if self._batch_queue:
+                    remaining = self._batch_queue.copy()
+                    self._batch_queue.clear()
+                    self._processing_batch = True
+
+            if remaining:
+                logger.info(f"Processing {len(remaining)} remaining files before shutdown")
+                # Process synchronously by calling worker directly (not in daemon thread)
+                try:
+                    self._process_batch_worker(remaining)
+                finally:
+                    self._processing_batch = False
             
             self.is_running = False
             self._processing_batch = False
@@ -311,25 +314,59 @@ class AutoIngestService:
         if not self._batch_queue:
             return
         
-        # Mark as processing and extract batch
+        # If already processing, another worker is running and will pick up queued items
+        if self._processing_batch:
+            logger.debug("Batch processor already running; queued files will be picked up by running worker")
+            return
+
+        # Mark as processing and extract initial batch
         self._processing_batch = True
-        batch_files = self._batch_queue.copy()
-        self._batch_queue.clear()
-        
-        # Cancel timer if present
+        # Cancel timer if present and take a greedy snapshot of all currently queued files
         if self._batch_timer:
             self._batch_timer.cancel()
             self._batch_timer = None
-        
-        # Process batch in a separate thread to avoid blocking
-        # Use a regular (non-daemon) thread so it can be properly joined on shutdown
+
+        initial_batch = self._batch_queue.copy()
+        self._batch_queue.clear()
+
+        # Start a single worker thread that will process batches greedily and sequentially
         self._batch_thread = threading.Thread(
-            target=self._process_batch_worker, 
-            args=(batch_files,),
+            target=self._process_batches_loop,
+            args=(initial_batch,),
             daemon=False,
             name="BatchProcessWorker"
         )
         self._batch_thread.start()
+
+    def _process_batches_loop(self, initial_batch: list[str]) -> None:
+        """
+        Worker loop that processes the initial batch and then continues to drain the queue
+        greedily until no more files remain. This ensures only one batch processor runs at a time
+        and all queued files are handled synchronously in series.
+        """
+        try:
+            # Process the first batch
+            if initial_batch:
+                self._process_batch_worker(initial_batch)
+
+            # Keep draining any newly queued files until queue is empty
+            while True:
+                next_batch = []
+                with self._batch_lock:
+                    if self._batch_queue:
+                        next_batch = self._batch_queue.copy()
+                        self._batch_queue.clear()
+
+                if not next_batch:
+                    break
+
+                logger.info(f"Greedy worker picked up {len(next_batch)} additional files")
+                self._process_batch_worker(next_batch)
+
+        finally:
+            # Mark processing as finished and clear thread handle
+            self._processing_batch = False
+            self._batch_thread = None
     
     def _process_batch_worker(self, batch_files: list[str]) -> None:
         """
@@ -366,7 +403,8 @@ class AutoIngestService:
         except Exception as e:
             logger.error(f"Error in batch processing: {e}", exc_info=True)
         finally:
-            self._processing_batch = False
+            # Do not flip _processing_batch here — the loop owner manages that flag
+            pass
     
     def _run_batch_preprocessing(self, batch_files: list[str]) -> list[str]:
         """
@@ -430,6 +468,7 @@ class AutoIngestService:
                         '--configfile', temp_config,
                         '--cores', '1',
                         '--quiet', 'progress',
+                        '--',
                         subtitle_target
                     ]
                     
