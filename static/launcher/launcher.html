@@ -807,11 +807,11 @@
         async function init() {
             // Try to restore working directory from localStorage
             const savedWorkingDir = loadWorkingDirFromStorage();
-            if (savedWorkingDir) {
-                // Pre-populate the input field
-                workingDirInput.value = savedWorkingDir;
+            if (savedWorkingDir && savedWorkingDir.trim()) {
+                // Basic validation: ensure it's a non-empty string
+                // The backend will perform full validation
                 
-                // Try to set it on the backend as well
+                // Try to set it on the backend first
                 try {
                     const response = await fetch('/api/launcher/set-working-dir', {
                         method: 'POST',
@@ -822,9 +822,21 @@
                     const result = await response.json();
                     if (result.success) {
                         console.log(`Restored working directory from localStorage: ${savedWorkingDir}`);
+                        // Only populate the input field if backend accepted it
+                        workingDirInput.value = savedWorkingDir;
+                    } else {
+                        // Backend rejected the saved path, clear it from localStorage
+                        console.warn(`Saved directory "${savedWorkingDir}" is invalid, clearing from localStorage`);
+                        try {
+                            localStorage.removeItem(WORKING_DIR_STORAGE_KEY);
+                        } catch (e) {
+                            // Ignore errors when clearing invalid data
+                        }
                     }
                 } catch (error) {
                     console.warn('Failed to restore working directory on backend:', error);
+                    // Don't populate the input field if backend communication failed
+                    // The fetchStatus() call below will populate it with the backend's current value
                 }
             }
             
