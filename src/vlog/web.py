@@ -515,6 +515,8 @@ def start_auto_ingest():
     data = request.json or {}
     watch_dir = data.get('watch_directory') or executor.working_directory
     model_name = data.get('model_name', DEFAULT_AUTOINGEST_MODEL)
+    batch_size = data.get('batch_size', 5)
+    batch_timeout = data.get('batch_timeout', 60.0)
     
     # Validate and normalize directory path
     try:
@@ -532,6 +534,16 @@ def start_auto_ingest():
             'message': f'Directory does not exist: {watch_dir}'
         }), 400
     
+    # Validate batch parameters
+    try:
+        batch_size = max(1, int(batch_size))
+        batch_timeout = max(1.0, float(batch_timeout))
+    except (TypeError, ValueError) as e:
+        return jsonify({
+            'success': False,
+            'message': f'Invalid batch parameters: {e}'
+        }), 400
+    
     # Check if service is already running
     if auto_ingest_service is not None and auto_ingest_service.is_running:
         return jsonify({
@@ -540,14 +552,19 @@ def start_auto_ingest():
         }), 400
     
     # Create new service (or recreate if parameters changed)
-    auto_ingest_service = AutoIngestService(watch_dir, model_name)
+    auto_ingest_service = AutoIngestService(
+        watch_dir, 
+        model_name,
+        batch_size=batch_size,
+        batch_timeout=batch_timeout
+    )
     
     success = auto_ingest_service.start()
     
     if success:
         return jsonify({
             'success': True,
-            'message': f'Auto-ingest started, monitoring: {watch_dir}'
+            'message': f'Auto-ingest started, monitoring: {watch_dir} (batch_size={batch_size}, timeout={batch_timeout}s)'
         })
     else:
         return jsonify({
