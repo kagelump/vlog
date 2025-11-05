@@ -275,6 +275,9 @@ def get_metadata():
 def get_thumbnail(filename):
     """
     Returns only the base64 thumbnail for a specific filename.
+    
+    DEPRECATED: Use /api/thumbnail-file/<filename> instead to get thumbnail as JPG file.
+    This endpoint is kept for backwards compatibility.
     """
     conn = get_db_connection()
     try:
@@ -288,6 +291,44 @@ def get_thumbnail(filename):
     except sqlite3.Error as e:
         logger.error(f"Database error in get_thumbnail: {str(e)}")
         return jsonify({"success": False, "message": "Database error occurred"}), 500
+
+
+@app.route('/api/thumbnail-file/<filename>', methods=['GET'])
+def get_thumbnail_file(filename):
+    """
+    Serves the thumbnail JPG file for a specific video filename.
+    
+    This is the preferred method for getting thumbnails (vs base64 from database).
+    """
+    try:
+        # Import here to avoid circular dependencies
+        from vlog.video import get_thumbnail_path_for_video
+        
+        # Resolve and validate the requested file is inside the executor's working directory
+        base_dir = Path(executor.working_directory).resolve()
+        
+        # Construct the video path to derive the thumbnail path
+        video_path = base_dir / filename
+        thumbnail_path_str = get_thumbnail_path_for_video(str(video_path))
+        thumbnail_path = Path(thumbnail_path_str).resolve()
+        
+        # Ensure the thumbnail path is within the working directory
+        try:
+            thumbnail_path.relative_to(base_dir)
+        except ValueError:
+            # Attempted path traversal or outside of working directory
+            return jsonify({'success': False, 'message': 'Invalid file path'}), 400
+        
+        # Check if thumbnail file exists
+        if not thumbnail_path.exists() or not thumbnail_path.is_file():
+            return jsonify({'success': False, 'message': 'Thumbnail not found'}), 404
+        
+        # Serve the thumbnail file
+        return send_from_directory(str(thumbnail_path.parent), thumbnail_path.name, mimetype='image/jpeg')
+        
+    except Exception as e:
+        logger.exception(f"Error serving thumbnail for {filename}: {e}")
+        return jsonify({'success': False, 'message': f'Error serving thumbnail: {str(e)}'}), 500
 
 
 # --- Routes: Data Modification ---

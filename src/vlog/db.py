@@ -38,7 +38,7 @@ def initialize_db(db_path=DATABASE):
                 classification_model TEXT,
                 video_length_seconds REAL,
                 video_timestamp TEXT,
-                video_thumbnail_base64 TEXT,
+                video_thumbnail_base64 TEXT,  -- DEPRECATED: Use thumbnail JPG file instead
                 clip_cut_duration REAL,
                 keep INTEGER DEFAULT 1,
                 in_timestamp TEXT,
@@ -168,11 +168,12 @@ def check_if_file_exists(filename: str) -> bool:
 
 def insert_result(filename, video_description_long, video_description_short, 
                   primary_shot_type, tags, classification_time_seconds, classification_model, 
-                  video_length_seconds, video_timestamp, video_thumbnail_base64, 
-                  in_timestamp, out_timestamp, rating, segments=None):
+                  video_length_seconds, video_timestamp, video_thumbnail_base64="", 
+                  in_timestamp=None, out_timestamp=None, rating=0.5, segments=None):
     """
     Inserts a new result into the database.
     
+    :param video_thumbnail_base64: DEPRECATED - now defaults to empty string as thumbnails are saved as JPG files
     :param segments: Optional list of segment dicts with 'in_timestamp' and 'out_timestamp' keys.
                      If provided, this takes precedence over in_timestamp/out_timestamp params.
     """
@@ -190,7 +191,7 @@ def insert_result(filename, video_description_long, video_description_short,
         """, (
             filename, video_description_long, video_description_short, primary_shot_type, json.dumps(tags or []), 
             current_time, classification_time_seconds, classification_model, 
-            video_length_seconds, video_timestamp, video_thumbnail_base64,
+            video_length_seconds, video_timestamp, video_thumbnail_base64 or "",
             in_timestamp, out_timestamp, rating, json.dumps(segments) if segments else None
         ))
         conn.commit()
