@@ -376,3 +376,75 @@ class TestProjectInfoAPI:
         # Should be an absolute path
         assert os.path.isabs(project_path) or project_path.startswith('/')
 
+
+class TestLauncherEndpoints:
+    """Tests for launcher API endpoints."""
+    
+    def test_set_working_dir_success(self, client):
+        """Test setting working directory to a valid path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            response = client.post(
+                '/api/launcher/set-working-dir',
+                json={'working_dir': tmpdir}
+            )
+            
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data['success'] is True
+            assert tmpdir in data['message']
+            
+            # Verify the status reflects the new working directory
+            status_response = client.get('/api/launcher/status')
+            status_data = json.loads(status_response.data)
+            assert status_data['working_directory'] == tmpdir
+    
+    def test_set_working_dir_nonexistent(self, client):
+        """Test setting working directory to a non-existent path."""
+        response = client.post(
+            '/api/launcher/set-working-dir',
+            json={'working_dir': '/nonexistent/path/12345'}
+        )
+        
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert 'does not exist' in data['message'].lower()
+    
+    def test_set_working_dir_missing_param(self, client):
+        """Test setting working directory without providing the path."""
+        response = client.post(
+            '/api/launcher/set-working-dir',
+            json={}
+        )
+        
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert 'required' in data['message'].lower()
+    
+    def test_launcher_status_returns_json(self, client):
+        """Test that launcher status endpoint returns JSON."""
+        response = client.get('/api/launcher/status')
+        
+        assert response.status_code == 200
+        assert response.content_type == 'application/json'
+        data = json.loads(response.data)
+        assert 'is_running' in data
+        assert 'working_directory' in data
+    
+    def test_set_working_dir_persists_across_status_checks(self, client):
+        """Test that setting working directory persists across status checks."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Set the working directory
+            set_response = client.post(
+                '/api/launcher/set-working-dir',
+                json={'working_dir': tmpdir}
+            )
+            assert set_response.status_code == 200
+            
+            # Check status multiple times to simulate periodic polling
+            for _ in range(3):
+                status_response = client.get('/api/launcher/status')
+                status_data = json.loads(status_response.data)
+                assert status_data['working_directory'] == tmpdir
+
