@@ -24,7 +24,7 @@ from vlog.describe_lib import (
     calculate_adaptive_fps,
     validate_model_output,
 )
-from vlog.video import get_video_length_and_timestamp, get_video_thumbnail
+from vlog.video import get_video_length_and_timestamp, save_video_thumbnail_to_file
 
 
 def describe_to_json(
@@ -107,9 +107,9 @@ def describe_to_json(
         # Validate the output
         validated_desc = validate_model_output(description)
 
-        # Get video thumbnail (use thumbnail_frame from model output if present)
+        # Save video thumbnail to file (use thumbnail_frame from model output if present)
         thumbnail_frame = validated_desc.get("thumbnail_frame", 0)
-        thumbnail_base64 = get_video_thumbnail(str(video_path), thumbnail_frame)
+        save_video_thumbnail_to_file(str(video_path), thumbnail_frame)
         
         # Calculate processing time
         classification_time = time.time() - start_time
@@ -125,7 +125,7 @@ def describe_to_json(
             "classification_model": model_name,
             "video_length_seconds": video_length,
             "video_timestamp": video_timestamp,
-            "video_thumbnail_base64": thumbnail_base64,
+            # video_thumbnail_base64 is deprecated - thumbnails are now saved as JPG files
             "rating": validated_desc.get("rating", 0.5),
             "segments": validated_desc.get("segments", []),
         }

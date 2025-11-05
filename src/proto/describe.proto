@@ -23,7 +23,7 @@ message VideoDescription {
   string classification_model = 8;
   double video_length_seconds = 9;
   string video_timestamp = 10;
-  string video_thumbnail_base64 = 11;
+  string video_thumbnail_base64 = 11; // DEPRECATED: Use thumbnail JPG file instead
   double clip_cut_duration = 12;
   int32 keep = 13; // 1=Keep, 0=Discard
   string in_timestamp = 14;

@@ -556,29 +556,13 @@
             const primaryShot = result.primary_shot_type || 'Unclassified';
             const videoFilename = result.filename || ''; // Use result.filename directly as it's the identifier
             
-            let rawBase64 = result.video_thumbnail_base64; // May be undefined/null from metadata endpoint
+            // 1. --- Thumbnail Setup (Use JPG file endpoint) ---
+            const videoFilename = result.filename;
             let thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=LOADING...';
 
-            // 1. --- Thumbnail Fetching (Optimized: Fetch only if missing) ---
-            if (!rawBase64 && videoFilename) {
-                try {
-                    // Fetch thumbnail using the new dedicated endpoint
-                    const thumbResponse = await fetch(`/api/thumbnail/${encodeURIComponent(videoFilename)}`);
-                    if (thumbResponse.ok) {
-                        const thumbData = await thumbResponse.json();
-                        rawBase64 = thumbData.video_thumbnail_base64;
-                        // Cache the thumbnail in the local result object so we don't fetch it again 
-                        // while the user is navigating the modal.
-                        result.video_thumbnail_base64 = rawBase64; 
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch thumbnail:", e);
-                }
-            }
-
-            // Set final thumbnail source
-            if (rawBase64) {
-                 thumbnailSrc = `data:image/png;base64,${rawBase64}`;
+            // Use the new thumbnail-file endpoint to get JPG directly
+            if (videoFilename) {
+                thumbnailSrc = `/api/thumbnail-file/${encodeURIComponent(videoFilename)}`;
             } else {
                 thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=NO+IMG';
             }
@@ -663,14 +647,9 @@
             // Function to load thumbnail for a specific row
             async function loadThumbnail(filename, imgElement) {
                 try {
-                    const response = await fetch(`/api/thumbnail/${filename}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.video_thumbnail_base64) {
-                            imgElement.src = `data:image/jpeg;base64,${data.video_thumbnail_base64}`;
-                            imgElement.classList.remove('animate-pulse', 'bg-gray-200');
-                        }
-                    }
+                    // Use the new thumbnail-file endpoint to get JPG directly
+                    imgElement.src = `/api/thumbnail-file/${encodeURIComponent(filename)}`;
+                    imgElement.classList.remove('animate-pulse', 'bg-gray-200');
                 } catch (error) {
                     console.error('Error loading thumbnail:', error);
                 }

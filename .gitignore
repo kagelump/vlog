@@ -64,3 +64,4 @@ coverage.xml
 
 # Build artifacts
 .build/
+test_data/

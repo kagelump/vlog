@@ -16,7 +16,7 @@ from vlog.describe_lib import (
     DescribeOutput,
     validate_model_output,
 )
-from vlog.video import get_video_length_and_timestamp, get_video_thumbnail
+from vlog.video import get_video_length_and_timestamp, save_video_thumbnail_to_file
 
 
 def describe_and_insert_video(
@@ -77,9 +77,11 @@ def describe_and_insert_video(
         print(f"Invalid thumbnail_frame for {fname}: {desc.get('thumbnail_frame')}")
         return None
 
-    thumbnail_base64 = get_video_thumbnail(full, thumbnail_frame, local_fps)
+    # Save thumbnail as JPG file next to the video
+    save_video_thumbnail_to_file(full, thumbnail_frame, local_fps)
 
     # Insert into DB (tags and segments already validated by pydantic)
+    # video_thumbnail_base64 is deprecated - thumbnails are now saved as JPG files
     insert_result(
         fname,
         desc['description'],
@@ -90,7 +92,7 @@ def describe_and_insert_video(
         model_name,
         video_length,
         video_timestamp,
-        thumbnail_base64,
+        "",  # video_thumbnail_base64 is deprecated
         desc.get('in_timestamp'),
         desc.get('out_timestamp'),
         desc.get('rating', 0.0),

@@ -18,7 +18,7 @@ from vlog.describe_lib import (
     load_subtitle_file,
     calculate_adaptive_fps,
 )
-from vlog.video import get_video_length_and_timestamp, get_video_thumbnail
+from vlog.video import get_video_length_and_timestamp, save_video_thumbnail_to_file
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -52,7 +52,7 @@ class DescribeResponse(BaseModel):
     classification_model: str
     video_length_seconds: float
     video_timestamp: str
-    video_thumbnail_base64: str
+    video_thumbnail_base64: str  # DEPRECATED: Use thumbnail JPG file instead
     in_timestamp: str
     out_timestamp: str
     rating: float
@@ -174,17 +174,16 @@ async def describe_video_endpoint(request: DescribeRequest):
     
     elapsed_time = time.time() - start_time
     
-    # Get thumbnail
+    # Save thumbnail to file
     try:
         thumbnail_frame = int(desc.get('thumbnail_frame', 0))
     except (ValueError, TypeError):
         thumbnail_frame = 0
     
     try:
-        thumbnail_base64 = get_video_thumbnail(request.filename, thumbnail_frame, fps)
+        save_video_thumbnail_to_file(request.filename, thumbnail_frame, fps)
     except Exception as e:
-        logger.warning(f"Failed to extract thumbnail: {e}")
-        thumbnail_base64 = ""
+        logger.warning(f"Failed to save thumbnail: {e}")
     
     # Convert segments to response format
     segments_response = None
@@ -197,7 +196,7 @@ async def describe_video_endpoint(request: DescribeRequest):
             for seg in desc['segments']
         ]
     
-    # Build response
+    # Build response (video_thumbnail_base64 is deprecated but kept for API compatibility)
     response = DescribeResponse(
         filename=base_filename,
         video_description_long=desc.get('description', ''),
@@ -208,7 +207,7 @@ async def describe_video_endpoint(request: DescribeRequest):
         classification_model=MODEL_STATE["model_name"] or "unknown",
         video_length_seconds=video_length,
         video_timestamp=video_timestamp,
-        video_thumbnail_base64=thumbnail_base64,
+        video_thumbnail_base64="",  # DEPRECATED: Now saved as JPG file
         in_timestamp=desc.get('in_timestamp', ''),
         out_timestamp=desc.get('out_timestamp', ''),
         rating=desc.get('rating', 0.0),

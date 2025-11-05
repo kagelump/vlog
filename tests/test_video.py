@@ -15,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from vlog.video import (
     get_video_length_and_timestamp,
     get_video_thumbnail,
+    save_video_thumbnail_to_file,
+    get_thumbnail_path_for_video,
     BLACK_PIXEL_BASE64,
 )
 
@@ -182,3 +184,109 @@ class TestBlackPixelBase64:
         assert BLACK_PIXEL_BASE64 is not None
         assert isinstance(BLACK_PIXEL_BASE64, str)
         assert len(BLACK_PIXEL_BASE64) > 0
+
+
+class TestSaveVideoThumbnailToFile:
+    """Tests for save_video_thumbnail_to_file function."""
+    
+    def test_save_thumbnail_to_file_valid_video(self, sample_video):
+        """Test saving thumbnail to file from a valid video."""
+        # Save thumbnail with default path
+        success = save_video_thumbnail_to_file(sample_video, 1, thumbnail_frame_fps=1.0)
+        
+        assert success is True
+        
+        # Check that the file was created
+        expected_path = get_thumbnail_path_for_video(sample_video)
+        assert os.path.exists(expected_path)
+        
+        # Verify it's a valid JPEG file
+        with open(expected_path, 'rb') as f:
+            header = f.read(2)
+            assert header == b'\xff\xd8'  # JPEG magic number
+        
+        # Cleanup
+        os.unlink(expected_path)
+    
+    def test_save_thumbnail_to_file_custom_path(self, sample_video):
+        """Test saving thumbnail to a custom path."""
+        # Create a temporary directory for the test
+        with tempfile.TemporaryDirectory() as temp_dir:
+            custom_path = os.path.join(temp_dir, 'custom_thumb.jpg')
+            
+            success = save_video_thumbnail_to_file(sample_video, 0, thumbnail_frame_fps=1.0, output_path=custom_path)
+            
+            assert success is True
+            assert os.path.exists(custom_path)
+            
+            # Verify it's a JPEG
+            with open(custom_path, 'rb') as f:
+                header = f.read(2)
+                assert header == b'\xff\xd8'
+    
+    def test_save_thumbnail_to_file_nonexistent_video(self, nonexistent_video):
+        """Test behavior when video doesn't exist."""
+        success = save_video_thumbnail_to_file(nonexistent_video, 0, thumbnail_frame_fps=1.0)
+        
+        assert success is False
+        
+        # Check that no file was created
+        expected_path = get_thumbnail_path_for_video(nonexistent_video)
+        assert not os.path.exists(expected_path)
+    
+    def test_save_thumbnail_different_frames(self, sample_video):
+        """Test saving thumbnails from different frames."""
+        # Create a temporary directory for the test
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path1 = os.path.join(temp_dir, 'thumb1.jpg')
+            path2 = os.path.join(temp_dir, 'thumb2.jpg')
+            
+            success1 = save_video_thumbnail_to_file(sample_video, 0, thumbnail_frame_fps=1.0, output_path=path1)
+            success2 = save_video_thumbnail_to_file(sample_video, 1, thumbnail_frame_fps=1.0, output_path=path2)
+            
+            assert success1 is True
+            assert success2 is True
+            assert os.path.exists(path1)
+            assert os.path.exists(path2)
+            
+            # Both should be JPEGs
+            with open(path1, 'rb') as f:
+                assert f.read(2) == b'\xff\xd8'
+            with open(path2, 'rb') as f:
+                assert f.read(2) == b'\xff\xd8'
+
+
+class TestGetThumbnailPathForVideo:
+    """Tests for get_thumbnail_path_for_video function."""
+    
+    def test_get_thumbnail_path_basic(self):
+        """Test basic thumbnail path generation."""
+        video_path = "/path/to/video.mp4"
+        expected_path = "/path/to/video_thumb.jpg"
+        
+        result = get_thumbnail_path_for_video(video_path)
+        assert result == expected_path
+    
+    def test_get_thumbnail_path_different_extension(self):
+        """Test thumbnail path with different video extension."""
+        video_path = "/path/to/video.mov"
+        expected_path = "/path/to/video_thumb.jpg"
+        
+        result = get_thumbnail_path_for_video(video_path)
+        assert result == expected_path
+    
+    def test_get_thumbnail_path_no_extension(self):
+        """Test thumbnail path when video has no extension."""
+        video_path = "/path/to/video"
+        expected_path = "/path/to/video_thumb.jpg"
+        
+        result = get_thumbnail_path_for_video(video_path)
+        assert result == expected_path
+    
+    def test_get_thumbnail_path_relative(self):
+        """Test thumbnail path with relative path."""
+        video_path = "videos/test.mp4"
+        expected_path = "videos/test_thumb.jpg"
+        
+        result = get_thumbnail_path_for_video(video_path)
+        assert result == expected_path
