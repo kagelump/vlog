@@ -284,6 +284,28 @@
         const autoIngestInfo = document.getElementById('auto-ingest-info');
         const autoIngestWatchDir = document.getElementById('auto-ingest-watch-dir');
 
+        // LocalStorage key for working directory
+        const WORKING_DIR_STORAGE_KEY = 'vlog_working_directory';
+
+        // Save working directory to localStorage
+        function saveWorkingDirToStorage(workingDir) {
+            try {
+                localStorage.setItem(WORKING_DIR_STORAGE_KEY, workingDir);
+            } catch (e) {
+                console.warn('Failed to save working directory to localStorage:', e);
+            }
+        }
+
+        // Load working directory from localStorage
+        function loadWorkingDirFromStorage() {
+            try {
+                return localStorage.getItem(WORKING_DIR_STORAGE_KEY);
+            } catch (e) {
+                console.warn('Failed to load working directory from localStorage:', e);
+                return null;
+            }
+        }
+
         // Update status display
         function updateStatus(status) {
             isRunning = status.is_running;
@@ -508,6 +530,8 @@
                 
                 if (result.success) {
                     consoleOutput.textContent += `\n[INFO] Working directory set to: ${workingDir}\n\n`;
+                    // Save to localStorage
+                    saveWorkingDirToStorage(workingDir);
                     fetchStatus();
                 } else {
                     alert(`Failed to set working directory: ${result.message}`);
@@ -747,6 +771,8 @@
                 
                 if (result.success) {
                     consoleOutput.textContent += `\n[INFO] Working directory set to: ${workingDir}\n\n`;
+                    // Save to localStorage
+                    saveWorkingDirToStorage(workingDir);
                     fetchStatus();
                 } else {
                     alert(`Failed to set working directory: ${result.message}`);
@@ -779,6 +805,29 @@
 
         // Initialize
         async function init() {
+            // Try to restore working directory from localStorage
+            const savedWorkingDir = loadWorkingDirFromStorage();
+            if (savedWorkingDir) {
+                // Pre-populate the input field
+                workingDirInput.value = savedWorkingDir;
+                
+                // Try to set it on the backend as well
+                try {
+                    const response = await fetch('/api/launcher/set-working-dir', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ working_dir: savedWorkingDir })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        console.log(`Restored working directory from localStorage: ${savedWorkingDir}`);
+                    }
+                } catch (error) {
+                    console.warn('Failed to restore working directory on backend:', error);
+                }
+            }
+            
             await fetchStatus();
             await loadScripts();
             await fetchAutoIngestStatus();
