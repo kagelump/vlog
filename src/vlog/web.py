@@ -169,7 +169,6 @@ def get_project_info():
     """
     return jsonify({
         'project_path': str(PROJECT_ROOT),
-        'database_file': DATABASE,
         'working_directory': working_directory,
         'version': '0.1.0'
     })

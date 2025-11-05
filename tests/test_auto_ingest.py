@@ -11,40 +11,6 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
-class TestAutoIngestIdempotency:
-    """Test that auto-ingest is idempotent and doesn't reprocess files."""
-    
-    def test_check_if_file_exists_prevents_reprocessing(self, use_temp_db):
-        """Test that check_if_file_exists correctly identifies already-processed files."""
-        from vlog.db import check_if_file_exists, insert_result
-        
-        filename = "test_video.mp4"
-        
-        # Initially, file should not exist in database
-        assert check_if_file_exists(filename) is False
-        
-        # Insert a result for this file
-        insert_result(
-            filename=filename,
-            video_description_long="Test description",
-            video_description_short="Test short",
-            primary_shot_type="insert",
-            tags=["test"],
-            classification_time_seconds=1.0,
-            classification_model="test-model",
-            video_length_seconds=10.0,
-            video_timestamp="2024-01-01T00:00:00",
-            video_thumbnail_base64="test_base64",
-            in_timestamp="00:00:00.000",
-            out_timestamp="00:00:10.000",
-            rating=0.8,
-            segments=None
-        )
-        
-        # Now file should exist in database
-        assert check_if_file_exists(filename) is True
-
-
 class TestVideoFileHandler:
     """Test the VideoFileHandler class."""
     
@@ -167,50 +133,6 @@ class TestBatchProcessing:
             assert status['queued_files'] == 0
             assert 'processing_batch' in status
             assert status['processing_batch'] is False
-    
-    @patch('vlog.auto_ingest.check_if_file_exists')
-    def test_process_video_file_adds_to_queue(self, mock_check_exists):
-        """Test that _process_video_file adds files to the batch queue."""
-        try:
-            from vlog.auto_ingest import AutoIngestService
-        except ImportError:
-            pytest.skip("auto_ingest module not available (missing dependencies)")
-        
-        mock_check_exists.return_value = False
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a dummy video file
-            video_file = os.path.join(tmpdir, "test.mp4")
-            Path(video_file).touch()
-            
-            service = AutoIngestService(tmpdir, batch_size=10, batch_timeout=60.0)
-            
-            # Process the file - should add to queue
-            service._process_video_file(video_file)
-            
-            # Check that file was added to queue
-            assert len(service._batch_queue) == 1
-            assert service._batch_queue[0] == video_file
-    
-    @patch('vlog.auto_ingest.check_if_file_exists')
-    def test_process_video_file_skips_existing(self, mock_check_exists):
-        """Test that _process_video_file skips already-processed files."""
-        try:
-            from vlog.auto_ingest import AutoIngestService
-        except ImportError:
-            pytest.skip("auto_ingest module not available (missing dependencies)")
-        
-        mock_check_exists.return_value = True  # File already exists
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            video_file = os.path.join(tmpdir, "test.mp4")
-            Path(video_file).touch()
-            
-            service = AutoIngestService(tmpdir, batch_size=10)
-            service._process_video_file(video_file)
-            
-            # Queue should remain empty
-            assert len(service._batch_queue) == 0
 
 
 class TestWebAPIEndpoints:

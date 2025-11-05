@@ -236,11 +236,6 @@ class AutoIngestService:
                 if Path(file_path).suffix not in VIDEO_EXTENSIONS:
                     continue
                 
-                # Check if already processed (idempotency)
-                if check_if_file_exists(filename):
-                    # TODO
-                    pass
-                
                 # Process the file
                 logger.info(f"Found unprocessed file: {filename}")
                 self._process_video_file(file_path)
@@ -259,11 +254,6 @@ class AutoIngestService:
         filename = os.path.basename(file_path)
         
         try:
-            # Idempotency check - skip if already processed
-            if check_if_file_exists(filename):
-                logger.info(f"File already processed, skipping: {filename}")
-                return
-            
             logger.info(f"Adding video file to batch queue: {filename}")
             
             with self._batch_lock:
