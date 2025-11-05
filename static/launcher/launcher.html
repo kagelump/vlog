@@ -654,7 +654,7 @@
                 const data = await response.json();
                 
                 if (!data.success) {
-                    throw new Error(data.message || 'Failed to load directory');
+                    throw new Error(data.message || `Failed to load directory: ${path}`);
                 }
                 
                 currentBrowserPath = data.current_path;
@@ -669,10 +669,8 @@
                     directoryItems.innerHTML = '<p class="text-gray-500 text-center py-4">This directory is empty</p>';
                 } else {
                     data.items.forEach(item => {
-                        if (item.is_directory) {
-                            const itemDiv = createDirectoryItem(item);
-                            directoryItems.appendChild(itemDiv);
-                        }
+                        const itemDiv = createDirectoryItem(item);
+                        directoryItems.appendChild(itemDiv);
                     });
                 }
                 

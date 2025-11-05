@@ -64,4 +64,7 @@ def browse_server_directory(path=None):
             'items': items
         })
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
+        # Log the full error but don't expose internal details to users
+        import logging
+        logging.error(f"Error browsing directory {path}: {str(e)}")
+        return jsonify({'success': False, 'message': 'An error occurred while browsing the directory'}), 500
