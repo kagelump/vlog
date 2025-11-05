@@ -63,4 +63,5 @@ coverage.xml
 .hypothesis/
 
 # Build artifacts
-.build/test_data/
+.build/
+test_data/

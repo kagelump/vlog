@@ -210,22 +210,19 @@ class TestSaveVideoThumbnailToFile:
     
     def test_save_thumbnail_to_file_custom_path(self, sample_video):
         """Test saving thumbnail to a custom path."""
-        fd, custom_path = tempfile.mkstemp(suffix='.jpg')
-        os.close(fd)
-        os.unlink(custom_path)  # Remove the file so we can test creation
-        
-        success = save_video_thumbnail_to_file(sample_video, 0, thumbnail_frame_fps=1.0, output_path=custom_path)
-        
-        assert success is True
-        assert os.path.exists(custom_path)
-        
-        # Verify it's a JPEG
-        with open(custom_path, 'rb') as f:
-            header = f.read(2)
-            assert header == b'\xff\xd8'
-        
-        # Cleanup
-        os.unlink(custom_path)
+        # Create a temporary directory for the test
+        with tempfile.TemporaryDirectory() as temp_dir:
+            custom_path = os.path.join(temp_dir, 'custom_thumb.jpg')
+            
+            success = save_video_thumbnail_to_file(sample_video, 0, thumbnail_frame_fps=1.0, output_path=custom_path)
+            
+            assert success is True
+            assert os.path.exists(custom_path)
+            
+            # Verify it's a JPEG
+            with open(custom_path, 'rb') as f:
+                header = f.read(2)
+                assert header == b'\xff\xd8'
     
     def test_save_thumbnail_to_file_nonexistent_video(self, nonexistent_video):
         """Test behavior when video doesn't exist."""
@@ -239,30 +236,24 @@ class TestSaveVideoThumbnailToFile:
     
     def test_save_thumbnail_different_frames(self, sample_video):
         """Test saving thumbnails from different frames."""
-        fd1, path1 = tempfile.mkstemp(suffix='_thumb1.jpg')
-        fd2, path2 = tempfile.mkstemp(suffix='_thumb2.jpg')
-        os.close(fd1)
-        os.close(fd2)
-        os.unlink(path1)
-        os.unlink(path2)
-        
-        success1 = save_video_thumbnail_to_file(sample_video, 0, thumbnail_frame_fps=1.0, output_path=path1)
-        success2 = save_video_thumbnail_to_file(sample_video, 1, thumbnail_frame_fps=1.0, output_path=path2)
-        
-        assert success1 is True
-        assert success2 is True
-        assert os.path.exists(path1)
-        assert os.path.exists(path2)
-        
-        # Both should be JPEGs
-        with open(path1, 'rb') as f:
-            assert f.read(2) == b'\xff\xd8'
-        with open(path2, 'rb') as f:
-            assert f.read(2) == b'\xff\xd8'
-        
-        # Cleanup
-        os.unlink(path1)
-        os.unlink(path2)
+        # Create a temporary directory for the test
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path1 = os.path.join(temp_dir, 'thumb1.jpg')
+            path2 = os.path.join(temp_dir, 'thumb2.jpg')
+            
+            success1 = save_video_thumbnail_to_file(sample_video, 0, thumbnail_frame_fps=1.0, output_path=path1)
+            success2 = save_video_thumbnail_to_file(sample_video, 1, thumbnail_frame_fps=1.0, output_path=path2)
+            
+            assert success1 is True
+            assert success2 is True
+            assert os.path.exists(path1)
+            assert os.path.exists(path2)
+            
+            # Both should be JPEGs
+            with open(path1, 'rb') as f:
+                assert f.read(2) == b'\xff\xd8'
+            with open(path2, 'rb') as f:
+                assert f.read(2) == b'\xff\xd8'
 
 
 class TestGetThumbnailPathForVideo:

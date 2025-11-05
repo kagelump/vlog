@@ -127,9 +127,9 @@ def save_video_thumbnail_to_file(file_path: str, thumbnail_frame: int, thumbnail
             # Get video FPS to convert the requested 'thumbnail_frame' to the actual frame number
             fps = cap.get(cv2.CAP_PROP_FPS)
             if fps <= 0:
-                 # Handle case where FPS is not detected or zero, default to frame index being the requested frame
-                 real_frame = thumbnail_frame
-                 print(" -> Warning: FPS not detected, using thumbnail_frame as direct frame index.")
+                # Handle case where FPS is not detected or zero, default to frame index being the requested frame
+                real_frame = thumbnail_frame
+                print(" -> Warning: FPS not detected, using thumbnail_frame as direct frame index.")
             else:
                 # Calculate the actual frame number based on the desired frame at the specified FPS
                 real_frame = thumbnail_frame * fps / thumbnail_frame_fps
