@@ -728,9 +728,35 @@
         }
 
         // Select current directory
-        function selectCurrentDirectory() {
+        async function selectCurrentDirectory() {
+            const previousDir = workingDirInput.value;
             workingDirInput.value = currentBrowserPath;
             closeDirectoryBrowser();
+            
+            // Automatically set the working directory in the backend
+            try {
+                const workingDir = currentBrowserPath;
+                
+                const response = await fetch('/api/launcher/set-working-dir', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ working_dir: workingDir })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    consoleOutput.textContent += `\n[INFO] Working directory set to: ${workingDir}\n\n`;
+                    fetchStatus();
+                } else {
+                    alert(`Failed to set working directory: ${result.message}`);
+                    workingDirInput.value = previousDir;
+                }
+            } catch (error) {
+                console.error('Failed to set working directory:', error);
+                alert('Failed to set working directory. See console for details.');
+                workingDirInput.value = previousDir;
+            }
         }
 
         // Event listeners
