@@ -616,6 +616,7 @@
 
         // Directory browser state and functions
         let currentBrowserPath = '';
+        let currentParentPath = null;
         const directoryModal = document.getElementById('directory-browser-modal');
         const browseDirBtn = document.getElementById('browse-dir-btn');
         const closeBrowserBtn = document.getElementById('close-browser-btn');
@@ -657,14 +658,13 @@
                 }
                 
                 currentBrowserPath = data.current_path;
+                currentParentPath = data.parent_path;
                 currentPathDisplay.textContent = currentBrowserPath;
                 
                 // Enable/disable go up button
-                goUpBtn.disabled = !data.parent_path;
+                goUpBtn.disabled = !currentParentPath;
                 
                 // Render directory items
-                directoryItems.innerHTML = '';
-                
                 if (data.items.length === 0) {
                     directoryItems.innerHTML = '<p class="text-gray-500 text-center py-4">This directory is empty</p>';
                 } else {
@@ -724,9 +724,8 @@
 
         // Go up to parent directory
         function goUpDirectory() {
-            if (currentBrowserPath) {
-                const parentPath = currentBrowserPath.split('/').slice(0, -1).join('/') || '/';
-                loadDirectory(parentPath);
+            if (currentParentPath) {
+                loadDirectory(currentParentPath);
             }
         }
 
