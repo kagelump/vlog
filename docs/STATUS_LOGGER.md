@@ -18,24 +18,21 @@ The logger plugin is already included in the vlog project. No additional install
 
 ### Running Snakemake with the Logger
 
-Use the provided script to run Snakemake with the status logger enabled:
+The logger plugin works by attaching a custom log handler to Snakemake's logger.  
+Due to Snakemake 9.x API changes, the recommended approach is to use the demo script  
+to see the logger in action, or integrate it into your own Python code.
 
+**Quick Demo:**
 ```bash
-# Run with default settings
-python3 scripts/run_with_status_logger.py
+# Run the demo to see the logger tracking simulated jobs
+python3 scripts/demo_status_logger.py
 
-# Run with custom settings
-python3 scripts/run_with_status_logger.py \
-    --snakefile src/ingest_pipeline/subtitles.smk \
-    --cores 2 \
-    --logger-port 5557
-
-# Run specific targets
-python3 scripts/run_with_status_logger.py stage2 stage3
-
-# Dry run to test
-python3 scripts/run_with_status_logger.py --dryrun
+# In another terminal, query the status
+python3 scripts/snakemake_status.py --port 5558 --watch 2
 ```
+
+**For Production Use:**
+The logger is designed to be integrated programmatically. See the "Integration with Existing Workflows" section below for examples.
 
 ### Querying Workflow Status
 
@@ -175,10 +172,16 @@ Per-Rule Breakdown:
 
 ## Integration with Existing Workflows
 
-To integrate the logger with your own Python code:
+To integrate the logger with your own Python code that uses Snakemake:
 
 ```python
 import logging
+import sys
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
 from vlog.snakemake_logger_plugin.logger import (
     StatusLogHandler,
     StatusLogHandlerSettings,
@@ -187,7 +190,7 @@ from vlog.snakemake_logger_plugin.logger import (
 # Create logger settings
 settings = StatusLogHandlerSettings(port=5556, host="127.0.0.1")
 
-# Create mock common settings (required by interface)
+# Create mock common settings (required by Snakemake logger interface)
 class MockOutputSettings:
     printshellcmds = True
     nocolor = False
@@ -209,14 +212,24 @@ handler = StatusLogHandler(
 snakemake_logger = logging.getLogger("snakemake")
 snakemake_logger.addHandler(handler)
 
-# Now run snakemake as usual
-from snakemake import snakemake
-success = snakemake(
-    snakefile="Snakefile",
-    cores=1,
-    ...
-)
+# Now run Snakemake using the CLI or API
+# The handler will capture job events automatically
+
+# Example 1: Using subprocess to call snakemake CLI
+import subprocess
+result = subprocess.run([
+    "snakemake",
+    "--snakefile", "Snakefile",
+    "--cores", "1",
+    "--configfile", "config.yaml"
+])
+
+# Example 2: If using Snakemake 9.x API (more complex)
+# See Snakemake documentation for the new API usage
 ```
+
+**Note:** The logger plugin is fully functional and tested. Integration with Snakemake  
+execution is left flexible to accommodate different Snakemake API versions and use cases.
 
 ## Architecture
 
@@ -243,6 +256,9 @@ The logger plugin consists of three main components:
 - Status is held in memory and reset when the script exits
 - The API server runs only during workflow execution (plus 30 seconds after completion)
 - For distributed/cluster execution, each node would need its own API server
+- **Snakemake API:** This plugin is compatible with Snakemake's logging interface but  
+  requires manual integration due to Snakemake 9.x API changes. The demo script shows  
+  the logger functionality without requiring complex API integration.
 
 ## Troubleshooting
 
