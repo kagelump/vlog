@@ -88,8 +88,24 @@ The Snakemake workflow provides:
 - **Flexible**: Copy or create preview files as needed
 - **Complete**: Full pipeline from SD card to JSON output
 - **Reproducible**: Workflow-based processing with dependency tracking
+- **Monitored**: Built-in status logger plugin with REST API to track progress
 
 See the [Snakemake Quick Start Guide](docs/SNAKEMAKE_QUICKSTART.md) or [Snakemake Workflow Documentation](docs/SNAKEMAKE_WORKFLOW.md) for detailed usage.
+
+#### Monitoring Workflow Progress
+
+vlog includes a custom Snakemake logger plugin that provides real-time status via REST API:
+
+```bash
+# Run Snakemake with status logger
+python3 scripts/run_with_status_logger.py
+
+# In another terminal, query status
+python3 scripts/snakemake_status.py
+python3 scripts/snakemake_status.py --watch 2  # refresh every 2 seconds
+```
+
+See the [Status Logger Documentation](docs/STATUS_LOGGER.md) for detailed usage and API reference.
 
 ### Command Line Usage
 
