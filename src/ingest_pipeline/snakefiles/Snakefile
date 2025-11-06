@@ -2,25 +2,33 @@
 Snakemake master workflow for complete video ingestion pipeline.
 
 This is the master workflow that orchestrates all 3 stages:
-1. Copy videos from SD card (Snakefile.copy)
-2. Generate and clean subtitles (Snakefile.subtitles)
-3. Describe videos (Snakefile.describe)
+1. Copy videos from SD card (copy.smk)
+2. Generate and clean subtitles (subtitles.smk)
+3. Describe videos (describe.smk)
+
+The workflow also manages the describe daemon (daemon.smk) which is started
+automatically before stage 3 and provides the MLX-VLM model service for video
+descriptions.
 
 For individual stages, use the specific Snakefiles directly.
 
 Usage:
     # Run all stages:
-    snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml
+    snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml
     
     # Run specific stage targets:
-    snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage1
-    snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage2
-    snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage3
+    snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml stage1
+    snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml stage2
+    snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml stage3
     
     # Or use individual stage files:
-    snakemake --snakefile src/ingest_pipeline/Snakefile.copy --cores 1 --configfile config.yaml
-    snakemake --snakefile src/ingest_pipeline/Snakefile.subtitles --cores 1 --configfile config.yaml
-    snakemake --snakefile src/ingest_pipeline/Snakefile.describe --cores 1 --configfile config.yaml
+    snakemake --snakefile src/ingest_pipeline/snakefiles/copy.smk --cores 1 --configfile config.yaml
+    snakemake --snakefile src/ingest_pipeline/snakefiles/subtitles.smk --cores 1 --configfile config.yaml
+    snakemake --snakefile src/ingest_pipeline/snakefiles/describe.smk --cores 1 --configfile config.yaml
+    
+    # Daemon management (usually handled automatically):
+    snakemake --snakefile src/ingest_pipeline/snakefiles/daemon.smk --cores 1 --configfile config.yaml start_daemon
+    snakemake --snakefile src/ingest_pipeline/snakefiles/daemon.smk --cores 1 --configfile config.yaml stop_daemon
 """
 
 import os
@@ -64,13 +72,16 @@ DAEMON_PORT = config.get("daemon_port", 5555)
 # Note: Each stage file has its own discovery function and rules
 
 # Stage 1: Copy videos from SD card
-include: "Snakefile.copy"
+include: "copy.smk"
 
 # Stage 2: Generate and clean subtitles  
-include: "Snakefile.subtitles"
+include: "subtitles.smk"
 
 # Stage 3: Describe videos
-include: "Snakefile.describe"
+include: "describe.smk"
+
+# Daemon management
+include: "daemon.smk"
 
 
 # Default target - runs all stages
@@ -100,26 +111,12 @@ rule stage2:
     input:
         expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}_cleaned.srt", stem=discover_preview_videos())
 
-localrules: start_daemon, stop_daemon
-
-rule start_daemon:
-    input:
-        "config/daemon_config.yml",
-        # Depend on all of stage 2 output.
-        expand(
-            f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}_cleaned.srt", 
-            stem=discover_preview_videos() 
-        )
-    output:
-        temp("status/daemon_running.signal")
-    log:
-        "logs/daemon_start.log"
-    shell:
-        "uv {DAEMON_START_SCRIPT} {output} > {log} 2>&1"
-
 
 rule stage3:
     """Run only Stage 3: Describe videos"""
     input:
+        # Ensure daemon is running before starting stage 3
+        "status/daemon_running.signal",
         expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}.json", stem=discover_videos_with_subtitles())
+
 

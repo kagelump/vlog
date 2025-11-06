@@ -3,20 +3,22 @@ Snakemake workflow for describing videos using ML model.
 
 Stage 3: Describe videos and save results to JSON.
 
-This workflow describes videos using the MLX-VLM daemon. The daemon should be
-started externally before running this workflow for best results.
+This workflow describes videos using the MLX-VLM daemon. The daemon is
+automatically started by the master workflow (via daemon.smk) and will be
+available before any describe jobs run.
 
 Usage:
-    # Recommended: Start daemon first in a separate terminal
-    python -m vlog.describe_daemon --model mlx-community/Qwen3-VL-8B-Instruct-4bit &
+    # Run with master workflow (recommended - daemon managed automatically):
+    snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage3
     
-    # Then run workflow:
-    snakemake --snakefile src/ingest_pipeline/describe.smk --cores 1 --configfile config.yaml
+    # Or run independently (requires daemon to be started first):
+    snakemake --snakefile src/ingest_pipeline/snakefiles/describe.smk --cores 1 --configfile config.yaml
 
 Notes:
-    - The daemon should be running before starting this workflow
-    - All describe jobs will reuse the same daemon instance for efficiency
+    - When run via master workflow, daemon is started automatically
+    - All describe jobs reuse the same daemon instance for efficiency
     - The daemon keeps the model loaded in memory across all video processing
+    - Daemon management is handled in daemon.smk
 """
 
 from pathlib import Path
@@ -41,24 +43,19 @@ DESCRIBE_FPS = DESCRIBE.get("fps", 1.0)
 # Daemon settings
 DAEMON_HOST = config.get("daemon_host", "127.0.0.1")
 DAEMON_PORT = config.get("daemon_port", 5555)
-DAEMON_WATCH_FILE = config.get("daemon_watch_file", "daemon_watch.txt")
+
 
 # If there are cleaned subtitle files, it is ready for this stage.
 def discover_videos_with_subtitles():
     return glob_wildcards(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt").stem
 
-rule all:
-    input:
-        expand(f"{PREVIEW_FOLDER}/{{stem}}.json", stem=discover_videos_with_subtitles())
-
-localrules: start_daemon, stop_daemon
 
 rule describe:
     threads: 1
     input:
         video=f"{PREVIEW_FOLDER}/{{stem}}.mp4",
-        subtitle=f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt"
-        daemon_watch=DAEMON_WATCH_FILE
+        subtitle=f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt",
+        daemon_signal="status/daemon_running.signal"
     output:
         f"{PREVIEW_FOLDER}/{{stem}}.json"
     params:
