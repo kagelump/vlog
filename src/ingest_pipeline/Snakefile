@@ -1,0 +1,122 @@
+"""
+Snakemake master workflow for complete video ingestion pipeline.
+
+This is the master workflow that orchestrates all 3 stages:
+1. Copy videos from SD card (copy.smk)
+2. Generate and clean subtitles (subtitles.smk)
+3. Describe videos (describe.smk)
+
+The workflow also manages the describe daemon (daemon.smk) which is started
+automatically before stage 3 and provides the MLX-VLM model service for video
+descriptions.
+
+For individual stages, use the specific Snakefiles directly.
+
+Usage:
+    # Run all stages:
+    snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml
+    
+    # Run specific stage targets:
+    snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml stage1
+    snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml stage2
+    snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml stage3
+    
+    # Or use individual stage files:
+    snakemake --snakefile src/ingest_pipeline/snakefiles/copy.smk --cores 1 --configfile config.yaml
+    snakemake --snakefile src/ingest_pipeline/snakefiles/subtitles.smk --cores 1 --configfile config.yaml
+    snakemake --snakefile src/ingest_pipeline/snakefiles/describe.smk --cores 1 --configfile config.yaml
+    
+    # Daemon management (usually handled automatically):
+    snakemake --snakefile src/ingest_pipeline/snakefiles/daemon.smk --cores 1 --configfile config.yaml start_daemon
+    snakemake --snakefile src/ingest_pipeline/snakefiles/daemon.smk --cores 1 --configfile config.yaml stop_daemon
+"""
+
+import os
+import json
+
+
+# Load configuration
+configfile: "config.yaml"
+
+
+# Get SD card path and output folders from config
+SD_CARD = config.get("sd_card_path", "/Volumes/SDCARD")
+MAIN_FOLDER = config.get("main_folder", "videos/main")
+PREVIEW_FOLDER = config.get("preview_folder", "videos/preview")
+VIDEO_EXTENSIONS = config.get("video_extensions", ["mp4", "MP4", "mov", "MOV"])
+PREVIEW_EXT = config.get("preview_extension", "mp4")
+
+# Preview settings
+PREVIEW_SETTINGS = config.get("preview_settings", {})
+PREVIEW_WIDTH = PREVIEW_SETTINGS.get("width", 1280)
+PREVIEW_CRF = PREVIEW_SETTINGS.get("crf", 23)
+PREVIEW_PRESET = PREVIEW_SETTINGS.get("preset", "medium")
+
+# Transcribe settings
+TRANSCRIBE = config.get("transcribe", {})
+TRANSCRIBE_MODEL = TRANSCRIBE.get("model", "mlx-community/whisper-large-v3-turbo")
+
+# Describe settings
+DESCRIBE = config.get("describe", {})
+DESCRIBE_MODEL = DESCRIBE.get("model", "mlx-community/Qwen3-VL-8B-Instruct-4bit")
+DESCRIBE_MAX_PIXELS = DESCRIBE.get("max_pixels", 224)
+DESCRIBE_FPS = DESCRIBE.get("fps", 1.0)
+
+# Daemon settings
+DAEMON_HOST = config.get("daemon_host", "127.0.0.1")
+DAEMON_PORT = config.get("daemon_port", 5555)
+DAEMON_SIGNAL_FILE = config.get("daemon_signal_file", "status/daemon_running.signal")
+DAEMON_PID_FILE = config.get("daemon_pid_file", "status/daemon.pid")
+DAEMON_LOG_FILE = config.get("daemon_log_file", "logs/daemon.log")
+
+
+# Import stage-specific rules by including their Snakefiles
+# Note: Each stage file has its own discovery function and rules
+
+# Stage 1: Copy videos from SD card
+# include: "copy.smk"
+
+# Stage 2: Generate and clean subtitles  
+include: "subtitles.smk"
+
+# Stage 3: Describe videos
+include: "describe.smk"
+
+# Daemon management
+include: "daemon.smk"
+
+# Default target - runs all stages
+rule all:
+    input:
+        # Stage 1 outputs: main videos and previews
+        # expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()),
+        # expand(f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}", stem=discover_videos()),
+        # Stage 2 outputs: cleaned subtitles
+        expand(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt", stem=discover_preview_videos()),
+        
+        # Stage 3 outputs: JSON descriptions
+        expand(f"{PREVIEW_FOLDER}/{{stem}}.json", stem=discover_videos_with_subtitles())
+
+
+# Individual stage targets
+# rule stage1:
+#     """Run only Stage 1: Copy videos from SD card"""
+#     input:
+#         expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()),
+#         expand(f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}", stem=discover_videos())
+
+
+rule stage2:
+    """Run only Stage 2: Generate and clean subtitles"""
+    input:
+        expand(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt", stem=discover_preview_videos())
+
+
+rule stage3:
+    """Run only Stage 3: Describe videos"""
+    input:
+        # Ensure daemon is running before starting stage 3
+        DAEMON_SIGNAL_FILE,
+        expand(f"{PREVIEW_FOLDER}/{{stem}}.json", stem=discover_videos_with_subtitles())
+
+

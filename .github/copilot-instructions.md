@@ -20,8 +20,8 @@ This is a video logging and analysis application that uses machine learning (MLX
 - Saves results directly to database
 - Best for ad-hoc processing of individual videos
 
-**2. Snakemake Pipeline (Snakefile)**
-- Orchestrated workflow for batch processing from SD cards
+**2. Snakemake Pipeline (staged)**
+- Orchestrated workflow split into 3 stage files under `src/ingest_pipeline/snakefiles/`
 - Steps: copy main → copy/create preview → transcribe → clean subtitles → describe → JSON output
 - Configuration-driven via config.yaml
 - Handles both SD card and local directory modes
@@ -228,22 +228,35 @@ The database schema is also defined in Protocol Buffers format in `src/proto/des
 The project uses Snakemake for orchestrating the video ingestion pipeline from SD cards or local directories.
 
 **Workflow Overview:**
-1. `copy_main` - Copy main video file from source to main folder
-2. `copy_or_create_preview` - Copy or create preview file using ffmpeg
-3. `transcribe` - Generate subtitles using mlx_whisper
-4. `clean_subtitles` - Clean subtitle files (remove duplicates and hallucinations)
-5. `describe` - Analyze video and save results to JSON
-6. `json_to_db` - Import JSON results to database (optional)
 
-**Configuration:**
-- Main config: `config.yaml` (SD card path, folders, model settings)
-- Workflow definition: `Snakefile`
-- Helper scripts in `scripts/` directory
+The pipeline has been split into 3 independent stages for better control:
+
+1. **Stage 1: Copy** (`snakefiles/copy.smk`) - Copy main video files and create/copy preview files
+2. **Stage 2: Subtitles** (`snakefiles/subtitles.smk`) - Generate and clean subtitle files  
+3. **Stage 3: Describe** (`snakefiles/describe.smk`) - Analyze videos and save results to JSON
+
+**Master Workflow:**
+- `src/ingest_pipeline/Snakefile` - Orchestrates all 3 stages, can run them together or individually
+- Each stage can also be run independently using its own Snakefile
 
 **Running the workflow:**
 ```bash
-snakemake --cores 1 --configfile config.yaml
+# Run all stages together (master orchestrator)
+snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml
+
+# Run individual stages (now stored under src/ingest_pipeline/snakefiles)
+snakemake --snakefile src/ingest_pipeline/snakefiles/copy.smk --cores 1 --configfile config.yaml
+snakemake --snakefile src/ingest_pipeline/snakefiles/subtitles.smk --cores 1 --configfile config.yaml
+snakemake --snakefile src/ingest_pipeline/snakefiles/describe.smk --cores 1 --configfile config.yaml
+
+# Run specific stage from master file
+snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage1
 ```
+
+**Configuration:**
+- Main config: `config.yaml` (SD card path, folders, model settings)
+- Workflow definitions: `src/ingest_pipeline/Snakefile*`
+- Helper scripts in `src/ingest_pipeline/` directory
 
 **Key Guidelines:**
 - Use Snakemake rules for pipeline steps, not standalone scripts when possible
@@ -252,6 +265,8 @@ snakemake --cores 1 --configfile config.yaml
 - Use `shell:` blocks for external commands
 - Configuration should be in config.yaml, not hardcoded
 - Handle both SD card and local directory modes (check if source == destination)
+- Import modules within `run:` blocks to avoid parse-time dependency issues
+- Each stage file has its own discovery function for flexibility
 
 ### Auto-Ingest Feature
 The auto-ingest feature monitors a directory for new video files and automatically processes them through the Snakemake pipeline.
@@ -377,28 +392,31 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - `src/vlog/describe_daemon.py`: FastAPI service for video description
 - `src/vlog/describe_client.py`: Client for communicating with describe daemon
 - `src/vlog/web.py`: Flask application and API endpoints (legacy results viewer)
-- `src/vlog/launcher.py`: Web UI launcher for script execution
-- `src/vlog/launcher_utils.py`: Utilities for launcher (directory browsing, etc.)
 - `src/vlog/auto_ingest.py`: Automated video monitoring and ingestion
 - `src/vlog/srt_cleaner.py`: Subtitle file cleaning and processing
 - `src/vlog/davinci_clip_importer.py`: DaVinci Resolve integration script
 - `src/proto/describe.proto`: Protocol Buffers schema definition
-- `Snakefile`: Snakemake workflow definition
+- `src/ingest_pipeline/`: Snakemake pipeline files and helper scripts
+    - `Snakefile`: Master workflow orchestrating all 3 stages
+    - `snakefiles/`: Directory containing stage-specific Snakemake files
+        - `copy.smk`: Stage 1 - Copy videos from SD card
+        - `subtitles.smk`: Stage 2 - Generate and clean subtitles
+        - `describe.smk`: Stage 3 - Describe videos using daemon
+  - `create_preview.py`: Generate preview videos with ffmpeg
+  - `describe_to_json.py`: Describe video via daemon and save to JSON
+  - `discover_videos.py`: Discover video files on SD card
 - `config.yaml`: Main configuration file for Snakemake workflow
 - `scripts/`: Executable scripts for various operations
   - `ingest.sh`: Manual ingestion pipeline
-  - `transcribe.sh`: Video transcription
   - `launch_web.sh`: Start web UI launcher
   - `run_snakemake.sh`: Run Snakemake workflow
-  - `create_preview.py`: Generate preview videos with ffmpeg
-  - `describe_to_json.py`: Describe video and save to JSON
-  - `discover_videos.py`: Discover video files on SD card
+  - `setup_davinci_config.sh`: DaVinci Resolve configuration setup
+  - `verify_snakemake_env.py`: Verify Snakemake environment
 - `static/index.html`: Frontend UI for results viewer
 - `static/launcher/launcher.html`: Frontend UI for launcher
 - `prompts/`: Model prompts in YAML and Markdown formats
-- `docs/`: Detailed documentation (AUTO_INGEST.md, SNAKEMAKE_WORKFLOW.md, etc.)
+- `docs/`: Detailed documentation (AUTO_INGEST.md, SNAKEMAKE_WORKFLOW.md, STAGED_WORKFLOW.md, etc.)
 - `tests/`: Test suite (pytest-based)
-- Database modules should be imported and used, not duplicated
 
 ## Common Patterns
 

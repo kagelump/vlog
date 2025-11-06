@@ -65,3 +65,10 @@ coverage.xml
 # Build artifacts
 .build/
 test_data/
+
+# Temporary files
+*.pid
+*.signal
+
+# Log files
+*.log

@@ -1,0 +1,95 @@
+"""
+Stage 2: Subtitle generation and cleaning
+
+This stage:
+1. Transcribes preview videos to generate subtitles
+2. Cleans subtitle files (removes duplicates and hallucinations)
+
+Usage:
+    snakemake --snakefile src/ingest_pipeline/Snakefile.subtitles --cores 1 --configfile config.yaml
+"""
+
+import sys
+import os
+import glob
+from pathlib import Path
+import logging
+
+
+# Ensure parent folder (src/ingest_pipeline) is on sys.path so local modules can be imported
+# Path(__file__).parents[0] -> snakefiles, parents[1] -> ingest_pipeline
+parent_dir = Path(__file__).resolve().parents[1]
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+
+logging.basicConfig(level=logging.DEBUG)
+
+# Load configuration
+configfile: "config.yaml"
+
+
+# Get output folders from config
+PREVIEW_FOLDER = config.get("preview_folder", "videos/preview")
+PREVIEW_EXT = config.get("preview_extension", "mp4")
+
+# Transcribe settings
+TRANSCRIBE = config.get("transcribe", {})
+TRANSCRIBE_MODEL = TRANSCRIBE.get("model", "mlx-community/whisper-large-v3-turbo")
+
+
+# Discover existing preview videos
+def discover_preview_videos():
+    """Discover preview video files in the preview folder."""
+    preview_pattern = f"{PREVIEW_FOLDER}/*.{PREVIEW_EXT}"
+    # Logger for debug tracing
+    logger = logging.getLogger(__name__)
+    try:
+        logger.debug("Discovering preview videos with pattern: %s", preview_pattern)
+        video_files = glob.glob(preview_pattern)
+        logger.debug("Found %d preview files: %s", len(video_files), video_files)
+        stems = [Path(f).stem for f in video_files]
+        logger.debug("Derived stems: %s", stems)
+        return stems
+    except Exception as e:
+        # Log the full exception stack at debug level so callers can enable debug to investigate
+        logger.exception("Error while discovering preview videos: %s", e)
+        # Return empty list so Snakemake has a safe fallback (no inputs)
+        return []
+
+
+# Get list of video stems
+VIDEO_STEMS = discover_preview_videos()
+
+
+# Rule: Process all subtitles
+rule subtitles_all:
+    input:
+        # Cleaned subtitle files
+        expand(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt", stem=VIDEO_STEMS)
+
+
+# Rule: Transcribe preview file to generate subtitles
+rule transcribe:
+    threads: 2
+    input:
+        f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}"
+    output:
+        f"{PREVIEW_FOLDER}/{{stem}}.srt"
+    params:
+        model=TRANSCRIBE_MODEL
+    shell:
+        """
+        mlx_whisper --model "{params.model}" -f srt --task transcribe "{input}" --output-name "{wildcards.stem}" --output-dir "{PREVIEW_FOLDER}"
+        """
+
+
+# Rule: Clean subtitle file
+rule clean_subtitles:
+    input:
+        srt=f"{PREVIEW_FOLDER}/{{stem}}.srt"
+    output:
+        cleaned=f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt"
+    # Use Snakemake's script directive to run the cleaner as a separate script.
+    # This keeps the Snakefile declarative and lets the script handle imports.
+    script:
+        "scripts/srt_cleaner.py"

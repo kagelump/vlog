@@ -42,7 +42,7 @@ class TestDirectoryBrowser:
     
     def test_browse_home_directory(self, client):
         """Test browsing the home directory."""
-        response = client.get('/api/launcher/browse-directory')
+        response = client.get('/api/browse-directory')
         
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -53,7 +53,7 @@ class TestDirectoryBrowser:
     
     def test_browse_specific_directory(self, client, temp_dir_structure):
         """Test browsing a specific directory."""
-        response = client.get(f'/api/launcher/browse-directory?path={temp_dir_structure}')
+        response = client.get(f'/api/browse-directory?path={temp_dir_structure}')
         
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -71,7 +71,7 @@ class TestDirectoryBrowser:
     
     def test_browse_nonexistent_directory(self, client):
         """Test browsing a nonexistent directory."""
-        response = client.get('/api/launcher/browse-directory?path=/nonexistent/path/12345')
+        response = client.get('/api/browse-directory?path=/nonexistent/path/12345')
         
         assert response.status_code == 400
         data = json.loads(response.data)
@@ -81,7 +81,7 @@ class TestDirectoryBrowser:
     def test_browse_file_instead_of_directory(self, client, temp_dir_structure):
         """Test browsing a file path instead of directory."""
         file_path = os.path.join(temp_dir_structure, 'test.txt')
-        response = client.get(f'/api/launcher/browse-directory?path={file_path}')
+        response = client.get(f'/api/browse-directory?path={file_path}')
         
         assert response.status_code == 400
         data = json.loads(response.data)
@@ -91,7 +91,7 @@ class TestDirectoryBrowser:
     def test_parent_path_included(self, client, temp_dir_structure):
         """Test that parent path is included in response."""
         subfolder = os.path.join(temp_dir_structure, 'videos')
-        response = client.get(f'/api/launcher/browse-directory?path={subfolder}')
+        response = client.get(f'/api/browse-directory?path={subfolder}')
         
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -104,7 +104,7 @@ class TestDirectoryBrowser:
         hidden_dir = os.path.join(temp_dir_structure, '.hidden')
         os.makedirs(hidden_dir)
         
-        response = client.get(f'/api/launcher/browse-directory?path={temp_dir_structure}')
+        response = client.get(f'/api/browse-directory?path={temp_dir_structure}')
         
         assert response.status_code == 200
         data = json.loads(response.data)

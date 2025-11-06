@@ -1,7 +1,7 @@
 import json
 import os
 
-from vlog.describe import (
+from vlog.describe_lib import (
     DEFAULT_PROMPT_PATH,
     load_prompt_template,
     render_prompt,
