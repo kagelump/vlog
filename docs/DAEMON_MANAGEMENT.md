@@ -99,8 +99,9 @@ ls -la status/daemon_running.signal
 
 # Check PID file
 cat status/daemon.pid
-
+2. The configured signal file (default: `status/daemon_running.signal`) is created when daemon is ready
 # Check process
+3. All `describe` rules depend on the configured signal file (won't run until daemon is ready)
 ps -p $(cat status/daemon.pid)
 
 # Check health endpoint
@@ -108,7 +109,7 @@ curl http://127.0.0.1:5555/health
 ```
 
 ## Configuration
-
+      daemon_signal=config.get("daemon_signal_file", "status/daemon_running.signal")
 Daemon settings are configured in `config.yaml`:
 
 ```yaml
@@ -117,23 +118,22 @@ daemon_host: "127.0.0.1"
 daemon_port: 5555
 
 # Describe settings (used by daemon)
-describe:
-  model: "mlx-community/Qwen3-VL-8B-Instruct-4bit"
-  max_pixels: 224
-  fps: 1.0
-```
+ - Configurable signal file (default: `status/daemon_running.signal`): Signal file indicating daemon is ready (temp file, cleaned by Snakemake)
+ - Configurable PID file (default: `status/daemon.pid`): Process ID of the daemon
+ - Configurable daemon log (default: `logs/daemon.log`): Daemon stdout/stderr output
 
 ## Files Created
 
 The daemon management creates several files:
-
+ # Check signal file (default path: `status/daemon_running.signal`)
+ ls -la $(python -c "import yaml,sys;print(yaml.safe_load(open('config.yaml')).get('daemon_signal_file','status/daemon_running.signal'))")
 - `status/daemon_running.signal`: Signal file indicating daemon is ready (temp file, cleaned by Snakemake)
 - `status/daemon.pid`: Process ID of the daemon
 - `logs/daemon.log`: Daemon stdout/stderr output
 - `logs/daemon_start.log`: Start script output
 - `logs/daemon_stop.log`: Stop script output
 
-## Troubleshooting
+rm -f $(python -c "import yaml,sys;c=yaml.safe_load(open('config.yaml'));print(c.get('daemon_pid_file','status/daemon.pid'))") $(python -c "import yaml,sys;c=yaml.safe_load(open('config.yaml'));print(c.get('daemon_signal_file','status/daemon_running.signal'))")
 
 ### Daemon won't start
 

@@ -33,6 +33,11 @@ DESCRIBE_MODEL = DESCRIBE.get("model", "mlx-community/Qwen3-VL-8B-Instruct-4bit"
 # Daemon settings
 DAEMON_HOST = config.get("daemon_host", "127.0.0.1")
 DAEMON_PORT = config.get("daemon_port", 5555)
+# The daemon is READY
+DAEMON_SIGNAL_FILE = config.get("daemon_signal_file", "status/daemon_running.signal")
+# The daemon has STARTED
+DAEMON_PID_FILE = config.get("daemon_pid_file", "status/daemon.pid")
+DAEMON_LOG_FILE = config.get("daemon_log_file", "logs/daemon.log")
 
 
 # Helper function to discover preview videos (for dependency tracking)
@@ -73,22 +78,22 @@ rule start_daemon:
             stem=discover_preview_videos() 
         )
     output:
-        temp("status/daemon_running.signal")
+        temp(DAEMON_SIGNAL_FILE)
     params:
         model=DESCRIBE_MODEL,
         host=DAEMON_HOST,
         port=DAEMON_PORT,
-        log_file="logs/daemon.log",
-        pid_file="status/daemon.pid"
+        log_file=DAEMON_LOG_FILE,
+        pid_file=DAEMON_PID_FILE
     log:
         "logs/daemon_start.log"
     message:
         "Starting describe daemon on {params.host}:{params.port}"
     shell:
         """
-        # Create status directory if needed
-        mkdir -p status logs
-        
+        # Create status and log directories if needed
+        mkdir -p $(dirname "{params.log_file}") $(dirname "{params.pid_file}") $(dirname "{output}")
+
         # Run the daemon start script
         bash src/ingest_pipeline/start_daemon.sh \
             "{params.model}" \
@@ -104,8 +109,8 @@ rule start_daemon:
 rule stop_daemon:
     """Stop the describe daemon and clean up signal file."""
     input:
-        signal="status/daemon_running.signal",
-        pid="status/daemon.pid"
+        signal=DAEMON_SIGNAL_FILE,
+        pid=DAEMON_PID_FILE
     params:
         host=DAEMON_HOST,
         port=DAEMON_PORT

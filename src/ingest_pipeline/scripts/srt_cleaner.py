@@ -2,6 +2,8 @@ import os
 import re
 import mlx.core as mx
 from mlx_lm import load, generate
+from snakemake.script import snakemake
+
 
 TARGET_DIRECTORY = "." 
 OUTPUT_SUFFIX = "_cleaned.srt"
@@ -173,13 +175,14 @@ def clean_subtitles(subtitles):
     return result
 
 
-def process_srt_file(filename):    
+def process_srt_file(infile, outfile):    
     """
     Process a single SRT file: parse, clean, and reassemble.
     """
-    subtitles = parse_srt(filename)
+    subtitles = parse_srt(infile)
     output = clean_subtitles(subtitles)
-    return reassemble_srt(output)
+    with open(outfile, 'w', encoding='utf-8') as f:
+        f.write(reassemble_srt(output))
 
-if __name__ == "__main__":
-    process_srt_files()
+
+process_srt_file(snakemake.input.srt, snakemake.output.cleaned)

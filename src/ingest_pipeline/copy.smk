@@ -27,7 +27,6 @@ SD_CARD = config.get("sd_card_path", "/Volumes/SDCARD")
 MAIN_FOLDER = config.get("main_folder", "videos/main")
 PREVIEW_FOLDER = config.get("preview_folder", "videos/preview")
 VIDEO_EXTENSIONS = config.get("video_extensions", ["mp4", "MP4", "mov", "MOV"])
-PREVIEW_SUFFIX = config.get("preview_suffix", "_preview")
 PREVIEW_EXT = config.get("preview_extension", "mp4")
 
 # Preview settings
@@ -40,7 +39,7 @@ PREVIEW_PRESET = PREVIEW_SETTINGS.get("preset", "medium")
 # Discover videos on SD card
 def discover_videos():
     """Discover video files on the SD card."""
-    script_path = "src/ingest_pipeline/discover_videos.py"
+    script_path = "src/ingest_pipeline/scripts/discover_videos.py"
     extensions_json = json.dumps(VIDEO_EXTENSIONS)
     
     cmd = ["python3", script_path, SD_CARD, extensions_json, PREVIEW_SUFFIX]

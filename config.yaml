@@ -40,3 +40,11 @@ describe:
   model: "mlx-community/Qwen3-VL-8B-Instruct-4bit"
   # FPS will be adaptive based on video length
   max_pixels: 224
+
+# Daemon settings for the describe service
+daemon_host: "127.0.0.1"
+daemon_port: 5555
+# Files used by the daemon management (Snakemake + scripts)
+daemon_signal_file: "status/daemon_running.signal"
+daemon_pid_file: "status/daemon.pid"
+daemon_log_file: "logs/daemon.log"

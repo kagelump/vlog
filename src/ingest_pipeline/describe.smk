@@ -43,6 +43,7 @@ DESCRIBE_FPS = DESCRIBE.get("fps", 1.0)
 # Daemon settings
 DAEMON_HOST = config.get("daemon_host", "127.0.0.1")
 DAEMON_PORT = config.get("daemon_port", 5555)
+DAEMON_SIGNAL_FILE = config.get("daemon_signal_file", "status/daemon_running.signal")
 
 
 # If there are cleaned subtitle files, it is ready for this stage.
@@ -55,7 +56,7 @@ rule describe:
     input:
         video=f"{PREVIEW_FOLDER}/{{stem}}.mp4",
         subtitle=f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt",
-        daemon_signal="status/daemon_running.signal"
+        daemon_signal=DAEMON_SIGNAL_FILE
     output:
         f"{PREVIEW_FOLDER}/{{stem}}.json"
     params:
@@ -70,7 +71,7 @@ rule describe:
         "Describing video: {wildcards.stem}"
     shell:
         """
-        uv run -- python src/ingest_pipeline/describe_to_json.py \
+        uv run -- python src/ingest_pipeline/scripts/describe_to_json.py \
             "{input.video}" \
             "{input.subtitle}" \
             "{output}" \

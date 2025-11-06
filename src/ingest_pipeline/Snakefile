@@ -44,7 +44,6 @@ SD_CARD = config.get("sd_card_path", "/Volumes/SDCARD")
 MAIN_FOLDER = config.get("main_folder", "videos/main")
 PREVIEW_FOLDER = config.get("preview_folder", "videos/preview")
 VIDEO_EXTENSIONS = config.get("video_extensions", ["mp4", "MP4", "mov", "MOV"])
-PREVIEW_SUFFIX = config.get("preview_suffix", "_preview")
 PREVIEW_EXT = config.get("preview_extension", "mp4")
 
 # Preview settings
@@ -66,13 +65,16 @@ DESCRIBE_FPS = DESCRIBE.get("fps", 1.0)
 # Daemon settings
 DAEMON_HOST = config.get("daemon_host", "127.0.0.1")
 DAEMON_PORT = config.get("daemon_port", 5555)
+DAEMON_SIGNAL_FILE = config.get("daemon_signal_file", "status/daemon_running.signal")
+DAEMON_PID_FILE = config.get("daemon_pid_file", "status/daemon.pid")
+DAEMON_LOG_FILE = config.get("daemon_log_file", "logs/daemon.log")
 
 
 # Import stage-specific rules by including their Snakefiles
 # Note: Each stage file has its own discovery function and rules
 
 # Stage 1: Copy videos from SD card
-include: "copy.smk"
+# include: "copy.smk"
 
 # Stage 2: Generate and clean subtitles  
 include: "subtitles.smk"
@@ -83,40 +85,38 @@ include: "describe.smk"
 # Daemon management
 include: "daemon.smk"
 
-
 # Default target - runs all stages
 rule all:
     input:
         # Stage 1 outputs: main videos and previews
-        expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()),
-        expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}.{PREVIEW_EXT}", stem=discover_videos()),
-        
+        # expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()),
+        # expand(f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}", stem=discover_videos()),
         # Stage 2 outputs: cleaned subtitles
-        expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}_cleaned.srt", stem=discover_preview_videos()),
+        expand(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt", stem=discover_preview_videos()),
         
         # Stage 3 outputs: JSON descriptions
-        expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}.json", stem=discover_videos_with_subtitles())
+        expand(f"{PREVIEW_FOLDER}/{{stem}}.json", stem=discover_videos_with_subtitles())
 
 
 # Individual stage targets
-rule stage1:
-    """Run only Stage 1: Copy videos from SD card"""
-    input:
-        expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()),
-        expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}.{PREVIEW_EXT}", stem=discover_videos())
+# rule stage1:
+#     """Run only Stage 1: Copy videos from SD card"""
+#     input:
+#         expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()),
+#         expand(f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}", stem=discover_videos())
 
 
 rule stage2:
     """Run only Stage 2: Generate and clean subtitles"""
     input:
-        expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}_cleaned.srt", stem=discover_preview_videos())
+        expand(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt", stem=discover_preview_videos())
 
 
 rule stage3:
     """Run only Stage 3: Describe videos"""
     input:
         # Ensure daemon is running before starting stage 3
-        "status/daemon_running.signal",
-        expand(f"{PREVIEW_FOLDER}/{{stem}}{PREVIEW_SUFFIX}.json", stem=discover_videos_with_subtitles())
+        DAEMON_SIGNAL_FILE,
+        expand(f"{PREVIEW_FOLDER}/{{stem}}.json", stem=discover_videos_with_subtitles())
 
 
