@@ -63,15 +63,28 @@ The launcher provides:
 
 ### Auto-Ingest Feature
 
-Auto-ingest automatically monitors a directory for new video files and runs the complete ingestion pipeline (transcribe → clean subtitles → describe) without manual intervention.
+**NEW: Snakemake-Based Auto-Ingest** - The recommended approach for automatic video ingestion.
 
-**Key benefits:**
+Auto-ingest automatically monitors a directory for new video files and runs the complete ingestion pipeline without manual intervention. There are two versions:
+
+#### Auto-Ingest with Snakemake (Recommended)
+
+The new Snakemake-based auto-ingest provides:
+- **Full pipeline**: All 3 stages (copy → transcribe → clean subtitles → describe)
+- **Real-time progress**: Per-stage breakdown via Snakemake logger plugin
+- **Resource control**: Configure CPU cores and memory limits
+- **Visual feedback**: Progress bars and status indicators in the UI
+
+See the [Auto-Ingest with Snakemake Documentation](docs/AUTO_INGEST_SNAKEMAKE.md) for detailed usage.
+
+#### Legacy Auto-Ingest
+
+The original auto-ingest is still available for backward compatibility:
 - **Idempotent**: Won't reprocess files already in the database
 - **Automatic**: Detects new files as they're added
-- **Complete**: Runs the full pipeline for each video
-- **Convenient**: Control via web UI or REST API
+- **Batch processing**: Efficient multi-file processing
 
-Enable auto-ingest from the launcher UI, or see the [Auto-Ingest Documentation](docs/AUTO_INGEST.md) for detailed usage and API information.
+See the [Auto-Ingest Documentation](docs/AUTO_INGEST.md) for legacy auto-ingest information.
 
 ### Snakemake Workflow (SD Card Ingestion)
 
