@@ -426,6 +426,28 @@
         function clearConsole() {
             lastTimestamp = 0;
         }
+        
+        // (console removed) helper stub
+        function addConsoleMessage(message) {
+            console.log(message);
+        }
+        
+        // (script runner removed) helper stubs
+        const consoleOutput = { textContent: "" };
+        const clearConsoleBtn = { addEventListener: () => {} };
+        const stopScriptBtn = { addEventListener: () => {}, disabled: false };
+        
+        function loadScripts() {
+            return Promise.resolve();
+        }
+        
+        function fetchOutput() {
+            // No-op for removed script runner
+        }
+        
+        function stopScript() {
+            // No-op for removed script runner
+        }
 
         // Auto-ingest functions
         async function fetchAutoIngestStatus() {
