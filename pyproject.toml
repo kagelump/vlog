@@ -48,3 +48,13 @@ dev = [
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["vlog*", "snakemake_logger_plugin_vlog*"]
+
+[project.entry-points."snakemake.plugins.logger"]
+vlog = "snakemake_logger_plugin_vlog:LogHandler"

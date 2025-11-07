@@ -117,10 +117,10 @@ class TestStatusLogHandler(unittest.TestCase):
         """Set up test case."""
         # Reset global status before each test
         reset_workflow_status()
-        
-        self.settings = StatusLogHandlerSettings(port=5557)  # Use different port for tests
+        # Disable starting the HTTP server in tests to avoid port conflicts
+        self.settings = StatusLogHandlerSettings(port=5557, start_server=False)  # Use different port for tests
         self.common_settings = MockOutputSettings()
-        
+
         # Note: We won't actually start the API server in tests to avoid port conflicts
         # So we'll test the handler without __post_init__
     

@@ -51,10 +51,52 @@ class DaemonManager:
         return session
     
     def is_daemon_running(self) -> bool:
-        """Check if the daemon is already running."""
+        """Check if the daemon is already running.
+        
+        Returns:
+            bool: True if daemon is reachable (even if busy), False if not running
+        """
         try:
-            response = self.session.get(f"{self.base_url}/health", timeout=2)
+            # Try status endpoint first (gives more info)
+            response = self.session.get(f"{self.base_url}/status", timeout=5)
+            if response.status_code == 200:
+                status = response.json()
+                if status.get("is_busy"):
+                    print(f"Note: Daemon is currently processing {status.get('current_file', 'a file')}")
+                    if status.get("processing_time_seconds"):
+                        print(f"      Processing for {status['processing_time_seconds']}s")
+                return True
+        except requests.exceptions.Timeout:
+            # Timeout likely means daemon is busy, not dead
+            # Fall back to health check
+            pass
+        except requests.exceptions.ConnectionError:
+            # Connection refused/failed - daemon is definitely not running
+            return False
+        except requests.exceptions.RequestException:
+            # Other errors - try health check as fallback
+            pass
+        
+        # Fallback to health endpoint (simpler, faster)
+        try:
+            response = self.session.get(f"{self.base_url}/health", timeout=5)
             return response.status_code == 200
+        except requests.exceptions.Timeout:
+            # Timeout - check if we can at least connect to the port
+            import socket
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                result = sock.connect_ex((self.host, self.port))
+                sock.close()
+                if result == 0:
+                    print("Note: Daemon is responding slowly (likely busy processing)")
+                    return True
+                return False
+            except Exception:
+                return False
+        except requests.exceptions.ConnectionError:
+            return False
         except requests.exceptions.RequestException:
             return False
     
@@ -156,6 +198,33 @@ class DaemonManager:
             )
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 503:
+                # Daemon is busy
+                try:
+                    error_detail = e.response.json()
+                    print(f"Error: {error_detail.get('detail', 'Daemon is busy')}")
+                    print("Wait for the current job to complete and try again")
+                except Exception:
+                    print("Error: Daemon is busy processing another request")
+                    print("Wait for the current job to complete and try again")
+            else:
+                print(f"HTTP Error {e.response.status_code}: {e}")
+                if hasattr(e, 'response') and e.response is not None:
+                    try:
+                        error_detail = e.response.json()
+                        print(f"Error details: {error_detail}")
+                    except Exception:
+                        print(f"Error response: {e.response.text}")
+            return None
+        except requests.exceptions.Timeout as e:
+            print(f"Error: Request timed out after 600 seconds")
+            print("The daemon may still be processing - check daemon logs")
+            return None
+        except requests.exceptions.ConnectionError as e:
+            print(f"Error: Cannot connect to daemon at {self.base_url}")
+            print("The daemon may have crashed or been stopped")
+            return None
         except requests.exceptions.RequestException as e:
             print(f"Error describing video: {e}")
             if hasattr(e, 'response') and e.response is not None:
@@ -312,9 +381,15 @@ def main():
                 sys.exit(1)
             started_daemon = True
         elif not daemon_manager.is_daemon_running():
-            print(f"Error: No daemon running at {daemon_manager.base_url}")
-            print("Either start a daemon separately or remove --use-existing flag")
+            print(f"Error: Daemon not running at {daemon_manager.base_url}")
+            print("Possible reasons:")
+            print("  - Daemon is not started")
+            print("  - Daemon is starting up (wait a moment and try again)")
+            print("  - Wrong host/port specified")
+            print("\nEither start a daemon separately or remove --use-existing flag")
             sys.exit(1)
+        else:
+            print(f"Using existing daemon at {daemon_manager.base_url}")
         
         # Process videos
         process_videos(

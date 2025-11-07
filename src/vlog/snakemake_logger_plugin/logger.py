@@ -22,9 +22,14 @@ class StatusLogHandlerSettings(LogHandlerSettingsBase):
     """Settings for the status logger plugin."""
     
     # Port for the REST API server
-    port: int = 5556
+    port: int = field(default=5556, metadata={"help": "Port for the REST API server"})
     # Host for the REST API server
-    host: str = "127.0.0.1"
+    host: str = field(default="127.0.0.1", metadata={"help": "Host for the REST API server"})
+    # Enable debug logging of incoming LogRecord attributes (useful for
+    # diagnosing missing lifecycle events). Defaults to False.
+    debug: bool = field(
+        default=False, metadata={"help": "Log incoming record attributes for debugging"}
+    )
 
 
 class WorkflowStatus:
@@ -40,6 +45,13 @@ class WorkflowStatus:
         self._total_jobs = 0
         self._completed_jobs = 0
         self._failed_jobs = 0
+
+    def _normalize_job_id(self, job_id):
+        """Normalize job id to an int when possible for consistent lookups."""
+        try:
+            return int(job_id)
+        except Exception:
+            return job_id
     
     def add_job(self, job_id: int, rule: str):
         """Register a new job."""
@@ -51,40 +63,58 @@ class WorkflowStatus:
                     "completed": set(),
                     "failed": set()
                 }
-            self._jobs[rule]["pending"].add(str(job_id))
-            self._job_map[job_id] = (rule, "pending")
+            nid = self._normalize_job_id(job_id)
+            self._jobs[rule]["pending"].add(str(nid))
+            self._job_map[nid] = (rule, "pending")
             self._total_jobs += 1
     
     def start_job(self, job_id: int):
         """Mark a job as started."""
         with self._lock:
-            if job_id in self._job_map:
-                rule, old_status = self._job_map[job_id]
+            nid = self._normalize_job_id(job_id)
+            if nid in self._job_map:
+                rule, old_status = self._job_map[nid]
                 if rule in self._jobs and old_status in self._jobs[rule]:
-                    self._jobs[rule][old_status].discard(str(job_id))
-                    self._jobs[rule]["running"].add(str(job_id))
-                    self._job_map[job_id] = (rule, "running")
+                    self._jobs[rule][old_status].discard(str(nid))
+                    self._jobs[rule]["running"].add(str(nid))
+                    self._job_map[nid] = (rule, "running")
+            else:
+                # Job not registered yet - this can happen if JOB_STARTED/SHELLCMD
+                # fires before JOB_INFO. Add it as running with unknown rule.
+                rule = "unknown"
+                if rule not in self._jobs:
+                    self._jobs[rule] = {
+                        "pending": set(),
+                        "running": set(),
+                        "completed": set(),
+                        "failed": set()
+                    }
+                self._jobs[rule]["running"].add(str(nid))
+                self._job_map[nid] = (rule, "running")
+                self._total_jobs += 1
     
     def complete_job(self, job_id: int):
         """Mark a job as completed."""
         with self._lock:
-            if job_id in self._job_map:
-                rule, old_status = self._job_map[job_id]
+            nid = self._normalize_job_id(job_id)
+            if nid in self._job_map:
+                rule, old_status = self._job_map[nid]
                 if rule in self._jobs and old_status in self._jobs[rule]:
-                    self._jobs[rule][old_status].discard(str(job_id))
-                    self._jobs[rule]["completed"].add(str(job_id))
-                    self._job_map[job_id] = (rule, "completed")
+                    self._jobs[rule][old_status].discard(str(nid))
+                    self._jobs[rule]["completed"].add(str(nid))
+                    self._job_map[nid] = (rule, "completed")
                     self._completed_jobs += 1
     
     def fail_job(self, job_id: int):
         """Mark a job as failed."""
         with self._lock:
-            if job_id in self._job_map:
-                rule, old_status = self._job_map[job_id]
+            nid = self._normalize_job_id(job_id)
+            if nid in self._job_map:
+                rule, old_status = self._job_map[nid]
                 if rule in self._jobs and old_status in self._jobs[rule]:
-                    self._jobs[rule][old_status].discard(str(job_id))
-                    self._jobs[rule]["failed"].add(str(job_id))
-                    self._job_map[job_id] = (rule, "failed")
+                    self._jobs[rule][old_status].discard(str(nid))
+                    self._jobs[rule]["failed"].add(str(nid))
+                    self._job_map[nid] = (rule, "failed")
                     self._failed_jobs += 1
     
     def get_status(self) -> dict:
@@ -152,18 +182,30 @@ class StatusLogHandler(LogHandlerBase):
         """Initialize the status log handler."""
         self._settings = settings or StatusLogHandlerSettings()
         super().__init__(common_settings, self._settings)
+        # Start the API server so endpoints are available when the handler
+        # is attached. __post_init__ may not be invoked in this context,
+        # so start the server here to ensure availability.
         self._api_server = None
+        self._debug = bool(getattr(self._settings, "debug", False))
+        try:
+            # Import here to avoid circular dependencies and only when needed
+            from .api_server import start_api_server
+            # Start the API server by default (since we removed start_server field).
+            # Tests and some programmatic uses can avoid starting the server by
+            # passing settings=StatusLogHandlerSettings() to prevent port binding.
+            self._api_server = start_api_server(
+                host=self._settings.host, port=self._settings.port
+            )
+        except Exception as e:
+            # Don't let API startup failures crash Snakemake; handler should
+            # still operate (status tracking in-memory). The error can be
+            # observed in logs if needed.
+            import sys
+            print(f"[status-logger] Failed to start API server: {e}", file=sys.stderr, flush=True)
+            self._api_server = None
     
-    def __post_init__(self):
-        """Post-initialization to start REST API server."""
-        # Import here to avoid circular dependencies
-        from .api_server import start_api_server
-        
-        # Start the REST API server in a background thread
-        self._api_server = start_api_server(
-            host=self._settings.host,
-            port=self._settings.port
-        )
+    # Note: API server startup is done in __init__ to ensure it runs when
+    # Snakemake instantiates the handler. Leaving no-op here for clarity.
     
     def emit(self, record: LogRecord) -> None:
         """
@@ -172,31 +214,98 @@ class StatusLogHandler(LogHandlerBase):
         Captures job lifecycle events and updates the status tracker.
         """
         event = record.__dict__.get("event", None)
+
+        # If debug is enabled, emit a compact view of the incoming record so
+        # users can diagnose what fields Snakemake provides during a real run.
+        if getattr(self, "_debug", False):
+            try:
+                import sys
+
+                info = {
+                    "event": event,
+                    "jobid": record.__dict__.get("jobid"),
+                    "job_id": record.__dict__.get("job_id"),
+                    "job_ids": record.__dict__.get("job_ids"),
+                    "rule_name": record.__dict__.get("rule_name"),
+                    "rule": record.__dict__.get("rule"),
+                    "msg": record.__dict__.get("msg", "")[:100],  # First 100 chars of message
+                }
+                print("[status-logger-debug]", info, file=sys.stderr, flush=True)
+            except Exception:
+                pass
         
         if event == LogEvent.JOB_INFO:
-            # New job registered
+            # New job registered and selected for execution
+            # In Snakemake, JOB_INFO means the job is about to run, so we mark it
+            # as running immediately rather than pending.
             job_id = record.__dict__.get("jobid")
-            rule = record.__dict__.get("rule", "unknown")
+            # Snakemake's LogRecord may provide the rule name under different
+            # keys depending on version/format. Prefer `rule_name` (used by
+            # Snakemake), fall back to `rule`, `rule_msg`, or finally
+            # "unknown" to avoid losing the information.
+            rule = (
+                record.__dict__.get("rule_name")
+                or record.__dict__.get("rule")
+                or record.__dict__.get("rule_msg")
+                or "unknown"
+            )
             if job_id is not None:
+                # Add job and immediately mark as running since JOB_INFO means
+                # the job has been selected for execution
                 _workflow_status.add_job(job_id, rule)
+                _workflow_status.start_job(job_id)
+                if self._debug:
+                    import sys
+                    print(f"[status-logger] JOB_INFO: job_id={job_id}, rule={rule} -> marking as RUNNING", file=sys.stderr, flush=True)
         
         elif event == LogEvent.JOB_STARTED:
             # Job started execution
-            job_id = record.__dict__.get("jobid")
+            # Snakemake may provide a list of started job ids under 'job_ids',
+            # or a single id under 'jobid' / 'job_id'. Handle all cases.
+            job_ids = record.__dict__.get("job_ids")
+            if job_ids:
+                for jid in job_ids:
+                    _workflow_status.start_job(jid)
+                    if self._debug:
+                        import sys
+                        print(f"[status-logger] JOB_STARTED: job_id={jid} (from job_ids list)", file=sys.stderr, flush=True)
+            else:
+                job_id = record.__dict__.get("jobid") or record.__dict__.get("job_id")
+                if job_id is not None:
+                    _workflow_status.start_job(job_id)
+                    if self._debug:
+                        import sys
+                        print(f"[status-logger] JOB_STARTED: job_id={job_id}", file=sys.stderr, flush=True)
+        
+        elif event == LogEvent.SHELLCMD:
+            # Shell command executing (job is actually running now)
+            # This is a more reliable indicator that a job is running than JOB_STARTED
+            job_id = record.__dict__.get("jobid") or record.__dict__.get("job_id")
             if job_id is not None:
                 _workflow_status.start_job(job_id)
+                if self._debug:
+                    import sys
+                    print(f"[status-logger] SHELLCMD: job_id={job_id}", file=sys.stderr, flush=True)
         
         elif event == LogEvent.JOB_FINISHED:
             # Job completed successfully
-            job_id = record.__dict__.get("jobid")
+            # Snakemake may use 'job_id' or 'jobid' for finished jobs.
+            job_id = record.__dict__.get("job_id") or record.__dict__.get("jobid")
             if job_id is not None:
                 _workflow_status.complete_job(job_id)
+                if self._debug:
+                    import sys
+                    print(f"[status-logger] JOB_FINISHED: job_id={job_id}", file=sys.stderr, flush=True)
         
         elif event == LogEvent.JOB_ERROR:
             # Job failed
-            job_id = record.__dict__.get("jobid")
+            # Accept 'jobid' or 'job_id'
+            job_id = record.__dict__.get("jobid") or record.__dict__.get("job_id")
             if job_id is not None:
                 _workflow_status.fail_job(job_id)
+                if self._debug:
+                    import sys
+                    print(f"[status-logger] JOB_ERROR: job_id={job_id}", file=sys.stderr, flush=True)
     
     @property
     def writes_to_stream(self) -> bool:

@@ -86,7 +86,8 @@ def test_logger_integration():
             dryrun = False
         
         # Create logger handler
-        settings = StatusLogHandlerSettings(port=5559, host="127.0.0.1")
+    # Ensure handler doesn't try to start its own server (we already started it)
+    settings = StatusLogHandlerSettings(port=5559, host="127.0.0.1", start_server=False)
         # Disable __post_init__ since we already started the server
         StatusLogHandler.__post_init__ = lambda self: None
         

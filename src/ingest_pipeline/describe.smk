@@ -52,7 +52,8 @@ def discover_videos_with_subtitles():
 
 
 rule describe:
-    threads: 1
+    resources:
+        mem_gb=8
     input:
         video=f"{PREVIEW_FOLDER}/{{stem}}.mp4",
         subtitle=f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt",

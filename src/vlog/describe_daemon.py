@@ -69,6 +69,14 @@ MODEL_STATE: dict = {
     "model_name": None,
 }
 
+# Processing state
+PROCESSING_STATE: dict = {
+    "is_busy": False,
+    "current_file": None,
+    "start_time": None,
+    "total_processed": 0,
+}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -107,12 +115,36 @@ app = FastAPI(
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint - always responds quickly even if busy."""
     return {
         "status": "healthy",
         "model_loaded": MODEL_STATE["model"] is not None,
         "model_name": MODEL_STATE.get("model_name"),
     }
+
+
+@app.get("/status")
+async def status_check():
+    """
+    Status endpoint with processing information.
+    
+    Returns information about whether daemon is busy and what it's processing.
+    """
+    status = {
+        "status": "healthy",
+        "model_loaded": MODEL_STATE["model"] is not None,
+        "model_name": MODEL_STATE.get("model_name"),
+        "is_busy": PROCESSING_STATE["is_busy"],
+        "total_processed": PROCESSING_STATE["total_processed"],
+    }
+    
+    if PROCESSING_STATE["is_busy"] and PROCESSING_STATE["current_file"]:
+        status["current_file"] = os.path.basename(PROCESSING_STATE["current_file"])
+        if PROCESSING_STATE["start_time"]:
+            elapsed = time.time() - PROCESSING_STATE["start_time"]
+            status["processing_time_seconds"] = round(elapsed, 1)
+    
+    return status
 
 
 @app.post("/describe", response_model=DescribeResponse)
@@ -133,90 +165,112 @@ async def describe_video_endpoint(request: DescribeRequest):
     if MODEL_STATE["model"] is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
-    # Validate file exists
-    if not os.path.isfile(request.filename):
-        raise HTTPException(status_code=404, detail=f"File not found: {request.filename}")
-    
-    # Extract base filename
-    base_filename = os.path.basename(request.filename)
-    
-    # Load subtitle if present
-    subtitle_file = os.path.splitext(request.filename)[0] + '.srt'
-    subtitle_text = load_subtitle_file(subtitle_file)
-    
-    # Get video metadata
-    try:
-        video_length, video_timestamp = get_video_length_and_timestamp(request.filename)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read video metadata: {e}")
-    
-    # Calculate adaptive FPS
-    fps = calculate_adaptive_fps(video_length, request.fps)
-    
-    # Describe the video
-    start_time = time.time()
-    try:
-        desc = describe_video(
-            MODEL_STATE["model"],
-            MODEL_STATE["processor"],
-            MODEL_STATE["config"],
-            request.filename,
-            prompt=None,  # Use default prompt
-            fps=fps,
-            subtitle=subtitle_text,
-            max_pixels=request.max_pixels,
-            max_tokens=request.max_tokens,
-            temperature=request.temperature,
+    # Check if already busy (optional - remove this if you want to queue)
+    if PROCESSING_STATE["is_busy"]:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Daemon is busy processing {os.path.basename(PROCESSING_STATE['current_file'])}"
         )
-    except Exception as e:
-        logger.error(f"Failed to describe video {base_filename}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to describe video: {e}")
     
-    elapsed_time = time.time() - start_time
-    
-    # Save thumbnail to file
-    try:
-        thumbnail_frame = int(desc.get('thumbnail_frame', 0))
-    except (ValueError, TypeError):
-        thumbnail_frame = 0
+    # Mark as busy
+    PROCESSING_STATE["is_busy"] = True
+    PROCESSING_STATE["current_file"] = request.filename
+    PROCESSING_STATE["start_time"] = time.time()
     
     try:
-        save_video_thumbnail_to_file(request.filename, thumbnail_frame, fps)
-    except Exception as e:
-        logger.warning(f"Failed to save thumbnail: {e}")
-    
-    # Convert segments to response format
-    segments_response = None
-    if desc.get('segments'):
-        segments_response = [
-            SegmentResponse(
-                in_timestamp=seg.get('in_timestamp', ''),
-                out_timestamp=seg.get('out_timestamp', '')
+        # Validate file exists
+        if not os.path.isfile(request.filename):
+            raise HTTPException(status_code=404, detail=f"File not found: {request.filename}")
+        
+        # Extract base filename
+        base_filename = os.path.basename(request.filename)
+        
+        # Load subtitle if present
+        subtitle_file = os.path.splitext(request.filename)[0] + '.srt'
+        subtitle_text = load_subtitle_file(subtitle_file)
+        
+        # Get video metadata
+        try:
+            video_length, video_timestamp = get_video_length_and_timestamp(request.filename)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to read video metadata: {e}")
+        
+        # Calculate adaptive FPS
+        fps = calculate_adaptive_fps(video_length, request.fps)
+        
+        # Describe the video
+        start_time = time.time()
+        try:
+            desc = describe_video(
+                MODEL_STATE["model"],
+                MODEL_STATE["processor"],
+                MODEL_STATE["config"],
+                request.filename,
+                prompt=None,  # Use default prompt
+                fps=fps,
+                subtitle=subtitle_text,
+                max_pixels=request.max_pixels,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
             )
-            for seg in desc['segments']
-        ]
-    
-    # Build response (video_thumbnail_base64 is deprecated but kept for API compatibility)
-    response = DescribeResponse(
-        filename=base_filename,
-        video_description_long=desc.get('description', ''),
-        video_description_short=desc.get('short_name', ''),
-        primary_shot_type=desc.get('primary_shot_type', ''),
-        tags=desc.get('tags', []),
-        classification_time_seconds=elapsed_time,
-        classification_model=MODEL_STATE["model_name"] or "unknown",
-        video_length_seconds=video_length,
-        video_timestamp=video_timestamp,
-        video_thumbnail_base64="",  # DEPRECATED: Now saved as JPG file
-        in_timestamp=desc.get('in_timestamp', ''),
-        out_timestamp=desc.get('out_timestamp', ''),
-        rating=desc.get('rating', 0.0),
-        segments=segments_response,
-        camera_movement=desc.get('camera_movement'),
-        thumbnail_frame=thumbnail_frame,
-    )
-    
-    return response
+        except Exception as e:
+            logger.error(f"Failed to describe video {base_filename}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to describe video: {e}")
+        
+        elapsed_time = time.time() - start_time
+        
+        # Save thumbnail to file
+        try:
+            thumbnail_frame = int(desc.get('thumbnail_frame', 0))
+        except (ValueError, TypeError):
+            thumbnail_frame = 0
+        
+        try:
+            save_video_thumbnail_to_file(request.filename, thumbnail_frame, fps)
+        except Exception as e:
+            logger.warning(f"Failed to save thumbnail: {e}")
+        
+        # Convert segments to response format
+        segments_response = None
+        if desc.get('segments'):
+            segments_response = [
+                SegmentResponse(
+                    in_timestamp=seg.get('in_timestamp', ''),
+                    out_timestamp=seg.get('out_timestamp', '')
+                )
+                for seg in desc['segments']
+            ]
+        
+        # Build response (video_thumbnail_base64 is deprecated but kept for API compatibility)
+        response = DescribeResponse(
+            filename=base_filename,
+            video_description_long=desc.get('description', ''),
+            video_description_short=desc.get('short_name', ''),
+            primary_shot_type=desc.get('primary_shot_type', ''),
+            tags=desc.get('tags', []),
+            classification_time_seconds=elapsed_time,
+            classification_model=MODEL_STATE["model_name"] or "unknown",
+            video_length_seconds=video_length,
+            video_timestamp=video_timestamp,
+            video_thumbnail_base64="",  # DEPRECATED: Now saved as JPG file
+            in_timestamp=desc.get('in_timestamp', ''),
+            out_timestamp=desc.get('out_timestamp', ''),
+            rating=desc.get('rating', 0.0),
+            segments=segments_response,
+            camera_movement=desc.get('camera_movement'),
+            thumbnail_frame=thumbnail_frame,
+        )
+        
+        # Increment processed count
+        PROCESSING_STATE["total_processed"] += 1
+        
+        return response
+        
+    finally:
+        # Always mark as not busy when done (success or failure)
+        PROCESSING_STATE["is_busy"] = False
+        PROCESSING_STATE["current_file"] = None
+        PROCESSING_STATE["start_time"] = None
 
 
 def main(host: str = "127.0.0.1", port: int = 5555):
