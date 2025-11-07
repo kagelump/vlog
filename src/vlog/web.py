@@ -34,7 +34,15 @@ DEFAULT_AUTOINGEST_MODEL = 'mlx-community/Qwen3-VL-8B-Instruct-4bit'
 
 # Import auto-ingest services
 from vlog.auto_ingest import AutoIngestService
-from vlog.auto_ingest_snakemake import AutoIngestSnakemakeService
+
+# Try to import Snakemake-based auto-ingest (may fail if dependencies missing)
+try:
+    from vlog.auto_ingest_snakemake import AutoIngestSnakemakeService
+    SNAKEMAKE_AUTOINGEST_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Snakemake auto-ingest not available: {e}")
+    AutoIngestSnakemakeService = None
+    SNAKEMAKE_AUTOINGEST_AVAILABLE = False
 
 # Global auto-ingest service instances
 auto_ingest_service: Optional[AutoIngestService] = None
@@ -290,6 +298,16 @@ def stop_auto_ingest():
 @app.route('/api/auto-ingest-snakemake/status', methods=['GET'])
 def get_auto_ingest_snakemake_status():
     """Get the status of the auto-ingest Snakemake service."""
+    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
+        return jsonify({
+            'available': False,
+            'is_running': False,
+            'watch_directory': None,
+            'preview_folder': None,
+            'model_name': None,
+            'error': 'Snakemake auto-ingest dependencies not installed'
+        })
+    
     if auto_ingest_snakemake_service is None:
         return jsonify({
             'available': True,
@@ -307,6 +325,12 @@ def get_auto_ingest_snakemake_status():
 @app.route('/api/auto-ingest-snakemake/progress', methods=['GET'])
 def get_auto_ingest_snakemake_progress():
     """Get the current progress from the Snakemake logger plugin."""
+    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
+        return jsonify({
+            'available': False,
+            'error': 'Snakemake auto-ingest not available'
+        }), 503
+    
     if auto_ingest_snakemake_service is None:
         return jsonify({
             'available': False,
@@ -321,6 +345,12 @@ def get_auto_ingest_snakemake_progress():
 def start_auto_ingest_snakemake():
     """Start the auto-ingest Snakemake service."""
     global auto_ingest_snakemake_service
+    
+    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'message': 'Snakemake auto-ingest is not available. Please install required dependencies (snakemake, watchdog, requests).'
+        }), 503
     
     data = request.json or {}
     watch_dir = data.get('watch_directory') or working_directory
