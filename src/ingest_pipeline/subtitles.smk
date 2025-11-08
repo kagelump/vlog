@@ -70,7 +70,7 @@ rule subtitles_all:
 # Rule: Transcribe preview file to generate JSON with word timestamps
 rule transcribe:
     resources:
-        mem_gb=4
+        mem_gb=5
     input:
         f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}"
     output:

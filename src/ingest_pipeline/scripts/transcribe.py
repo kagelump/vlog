@@ -23,6 +23,7 @@ import logging
 import sys
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import List, Dict
 
@@ -50,19 +51,28 @@ def merge_transcription_segments(
     merged = {
         "text": "",
         "segments": [],
-        "language": transcription_results[0].get("language", "en") if transcription_results else "en"
     }
+    languages = set()
     
     for vad_seg, trans_result in zip(vad_segments, transcription_results):
         offset = vad_seg['start']
-        
-        # Add text with space separator
-        if merged["text"]:
-            merged["text"] += " "
-        merged["text"] += trans_result.get("text", "")
+        print(trans_result)
+        result_ok = False
         
         # Adjust segment timestamps and add to merged result
         for segment in trans_result.get("segments", []):
+            # Skip segments with NaN avg_logprob
+            avg_logprob = segment.get('avg_logprob')
+            if avg_logprob is not None:
+                if math.isnan(avg_logprob):
+                    continue
+                if avg_logprob < -1.0:  # Arbitrary threshold to filter low-confidence segments
+                    continue
+            result_ok = True
+            if segment.get('compression_ratio', 100) > 3.0:
+                print('Discarding high compression ratio segment: %s', segment)
+                continue
+            
             adjusted_segment = segment.copy()
             adjusted_segment['start'] += offset
             adjusted_segment['end'] += offset
@@ -78,6 +88,15 @@ def merge_transcription_segments(
                 adjusted_segment['words'] = adjusted_words
             
             merged["segments"].append(adjusted_segment)
+        
+        if result_ok:
+            # Add text with space separator
+            if merged["text"]:
+                merged["text"] += " "
+            merged["text"] += trans_result.get("text", "")
+            languages.update(trans_result.get("language", 'en'))
+        
+    merged["language"] = list(languages)
     
     return merged
 
@@ -135,7 +154,8 @@ def run_transcribe(
                     path_or_hf_repo=model,
                     verbose=None,
                     word_timestamps=True,  # Enable for richer metadata
-                    clip_timestamps=[segment['start'], segment['end']]
+                    clip_timestamps=[segment['start'], segment['end']],
+                    temperature=(0.0, 0.2, 0.4, 0.5)
                 )
                 transcription_results.append(result)
             
