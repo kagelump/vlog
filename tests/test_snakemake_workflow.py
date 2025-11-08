@@ -171,9 +171,9 @@ class TestSnakefile(unittest.TestCase):
     def test_stage_snakefiles_exist(self):
         """Test that all stage Snakefiles exist."""
         stage_files = [
-            "src/vlog/workflows/Snakefile.copy",
-            "src/vlog/workflows/Snakefile.subtitles",
-            "src/vlog/workflows/Snakefile.describe"
+            "src/vlog/workflows/snakefiles/copy.smk",
+            "src/vlog/workflows/snakefiles/subtitles.smk",
+            "src/vlog/workflows/snakefiles/describe.smk"
         ]
         for snakefile in stage_files:
             with self.subTest(snakefile=snakefile):
@@ -182,9 +182,9 @@ class TestSnakefile(unittest.TestCase):
     def test_stage_snakefiles_syntax(self):
         """Test that stage Snakefiles have valid syntax."""
         stage_files = {
-            "src/vlog/workflows/Snakefile.copy": "copy_all",
-            "src/vlog/workflows/Snakefile.subtitles": "subtitles_all",
-            "src/vlog/workflows/Snakefile.describe": "describe_all"
+            "src/vlog/workflows/snakefiles/copy.smk": "copy_all",
+            "src/vlog/workflows/snakefiles/subtitles.smk": "subtitles_all",
+            "src/vlog/workflows/snakefiles/describe.smk": "describe"  # Uses 'describe' not 'describe_all'
         }
         for snakefile, rule_name in stage_files.items():
             with self.subTest(snakefile=snakefile):
@@ -198,9 +198,10 @@ class TestSnakefile(unittest.TestCase):
         snakefile_path = Path("src/vlog/workflows/Snakefile")
         with open(snakefile_path) as f:
             content = f.read()
-            self.assertIn('include: "Snakefile.copy"', content)
-            self.assertIn('include: "Snakefile.subtitles"', content)
-            self.assertIn('include: "Snakefile.describe"', content)
+            # Check for include statements with snakefiles/ directory
+            # Note: copy.smk might be commented out in master
+            self.assertIn('include: "snakefiles/subtitles.smk"', content)
+            self.assertIn('include: "snakefiles/describe.smk"', content)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,8 @@ from vlog.web_file_browser import browse_server_directory
 
 # Get the vlog package directory (for static files)
 PACKAGE_DIR = Path(__file__).parent
+# Get the project root directory (for project info API)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
