@@ -101,7 +101,6 @@ class AutoIngestSnakemakeService:
         # Snakemake process management
         self._snakemake_process: Optional[subprocess.Popen] = None
         self._snakemake_lock = threading.Lock()
-        self._trigger_processing = threading.Event()
         
         logger.info(f"AutoIngestSnakemakeService initialized")
         logger.info(f"  Watch directory: {self.watch_directory}")
