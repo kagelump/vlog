@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import logging
 import torch
-import torchaudio
+import soundfile as sf
+import numpy as np
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import List, Dict
 
@@ -33,6 +36,104 @@ def load_vad_model():
     except Exception as e:
         logging.error(f"Failed to load Silero VAD model: {e}")
         raise
+
+
+def load_audio_with_ffmpeg(
+    audio_path: str,
+    sample_rate: int = 16000
+) -> tuple[np.ndarray, int]:
+    """
+    Load audio file using ffmpeg and soundfile.
+    
+    This function uses ffmpeg to decode the audio to WAV format,
+    avoiding the need for torchaudio's ffmpeg backend integration.
+    
+    Args:
+        audio_path: Path to the audio/video file
+        sample_rate: Target sample rate (default: 16000 Hz)
+    
+    Returns:
+        tuple: (waveform as numpy array, sample_rate)
+        waveform shape: (samples,) for mono or (samples, channels) for stereo
+    """
+    # Create a temporary WAV file
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+        temp_wav = tmp_file.name
+    
+    try:
+        # Use ffmpeg to convert audio to WAV format at target sample rate
+        # -vn: no video, -acodec pcm_s16le: 16-bit PCM, -ac 1: mono, -ar: sample rate
+        cmd = [
+            'ffmpeg',
+            '-y',  # Overwrite output file
+            '-i', audio_path,  # Input file
+            '-vn',  # No video
+            '-acodec', 'pcm_s16le',  # 16-bit PCM
+            '-ar', str(sample_rate),  # Sample rate
+            '-ac', '1',  # Mono (convert to single channel)
+            temp_wav
+        ]
+        
+        # Run ffmpeg silently
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+        )
+        
+        # Load the WAV file using soundfile
+        waveform, sr = sf.read(temp_wav, dtype='float32')
+        
+        # Ensure waveform is 1D for mono
+        if waveform.ndim > 1:
+            waveform = np.mean(waveform, axis=1)
+        
+        return waveform, sr
+        
+    except subprocess.CalledProcessError as e:
+        logging.error(f"ffmpeg failed to process {audio_path}: {e.stderr.decode()}")
+        raise RuntimeError(f"Failed to load audio with ffmpeg: {e}")
+    except Exception as e:
+        logging.error(f"Failed to load audio from {audio_path}: {e}")
+        raise
+    finally:
+        # Clean up temp file
+        try:
+            Path(temp_wav).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def resample_audio(
+    waveform: np.ndarray,
+    orig_sr: int,
+    target_sr: int
+) -> np.ndarray:
+    """
+    Resample audio to target sample rate using linear interpolation.
+    
+    Args:
+        waveform: Audio waveform as numpy array
+        orig_sr: Original sample rate
+        target_sr: Target sample rate
+    
+    Returns:
+        Resampled waveform
+    """
+    if orig_sr == target_sr:
+        return waveform
+    
+    # Calculate new length
+    duration = len(waveform) / orig_sr
+    new_length = int(duration * target_sr)
+    
+    # Use numpy's linear interpolation
+    old_indices = np.arange(len(waveform))
+    new_indices = np.linspace(0, len(waveform) - 1, new_length)
+    resampled = np.interp(new_indices, old_indices, waveform)
+    
+    return resampled.astype(np.float32)
 
 
 def get_speech_segments(
@@ -74,28 +175,16 @@ def get_speech_segments(
     
     # Load audio file
     try:
-        # torchaudio.load returns (waveform, sample_rate)
-        # waveform shape: (channels, samples)
-        waveform, original_sr = torchaudio.load(audio_path)
+        # Load audio using ffmpeg + soundfile (avoiding torchaudio's ffmpeg backend issues)
+        # waveform shape: (samples,) for mono
+        waveform, loaded_sr = load_audio_with_ffmpeg(audio_path, sample_rate=sample_rate)
         
-        # Convert to mono if stereo
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-        
-        # Resample to 16kHz if needed (VAD expects 16kHz)
-        if original_sr != sample_rate:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=original_sr,
-                new_freq=sample_rate
-            )
-            waveform = resampler(waveform)
-        
-        # Flatten to 1D tensor (VAD expects 1D)
-        waveform = waveform.squeeze()
+        # Convert numpy array to torch tensor for VAD model
+        waveform_tensor = torch.from_numpy(waveform)
         
         # Get speech timestamps (returns sample indices)
         speech_timestamps = get_speech_timestamps(
-            waveform,
+            waveform_tensor,
             vad_model,
             threshold=threshold,
             sampling_rate=sample_rate,
@@ -143,41 +232,28 @@ def extract_audio_segment(
         Path to the extracted audio segment
     """
     try:
-        # Load audio
-        waveform, original_sr = torchaudio.load(audio_path)
-        
-        # Convert to mono
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-        
-        # Resample if needed
-        if original_sr != sample_rate:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=original_sr,
-                new_freq=sample_rate
-            )
-            waveform = resampler(waveform)
+        # Load audio using ffmpeg + soundfile
+        waveform, loaded_sr = load_audio_with_ffmpeg(audio_path, sample_rate=sample_rate)
         
         # Calculate sample indices
         start_sample = int(start_sec * sample_rate)
         end_sample = int(end_sec * sample_rate)
         
         # Extract segment
-        segment = waveform[:, start_sample:end_sample]
+        segment = waveform[start_sample:end_sample]
         
         # Save to file if output_path provided
         if output_path:
-            torchaudio.save(output_path, segment, sample_rate)
+            sf.write(output_path, segment, sample_rate)
             return output_path
         else:
             # Save to temp file
-            import tempfile
             temp_file = tempfile.NamedTemporaryFile(
                 delete=False,
                 suffix='.wav',
                 prefix='vad_segment_'
             )
-            torchaudio.save(temp_file.name, segment, sample_rate)
+            sf.write(temp_file.name, segment, sample_rate)
             return temp_file.name
             
     except Exception as e:

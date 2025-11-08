@@ -35,8 +35,8 @@ class TestVADUtils(unittest.TestCase):
         self.assertEqual(format_srt_timestamp(3661.999), "01:01:01,999")
     
     @patch('vad_utils.torch')
-    @patch('vad_utils.torchaudio')
-    def test_get_speech_segments_structure(self, mock_torchaudio, mock_torch):
+    @patch('vad_utils.load_audio_with_ffmpeg')
+    def test_get_speech_segments_structure(self, mock_load_audio, mock_torch):
         """Test that get_speech_segments returns proper structure."""
         # This test verifies the function structure without loading actual models
         # We'll mock the VAD model and utilities
@@ -48,16 +48,14 @@ class TestVADUtils(unittest.TestCase):
         # Mock the torch.hub.load to return our mocks
         mock_torch.hub.load.return_value = (mock_model, mock_utils)
         
-        # Mock torchaudio.load to return fake waveform
-        mock_waveform = MagicMock()
-        mock_waveform.shape = (1, 16000)  # 1 second of audio at 16kHz
-        mock_waveform.squeeze.return_value = mock_waveform
-        mock_torchaudio.load.return_value = (mock_waveform, 16000)
+        # Mock load_audio_with_ffmpeg to return fake waveform
+        import numpy as np
+        mock_waveform = np.random.randn(16000).astype(np.float32)  # 1 second of audio at 16kHz
+        mock_load_audio.return_value = (mock_waveform, 16000)
         
-        # Mock the resampler
-        mock_resampler = MagicMock()
-        mock_resampler.return_value = mock_waveform
-        mock_torchaudio.transforms.Resample.return_value = mock_resampler
+        # Mock torch.from_numpy to return a tensor-like object
+        mock_tensor = MagicMock()
+        mock_torch.from_numpy.return_value = mock_tensor
         
         # Mock get_speech_timestamps to return sample segments
         mock_get_speech_timestamps = mock_utils[0]

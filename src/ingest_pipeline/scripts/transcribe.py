@@ -187,7 +187,6 @@ def main_cli(argv: List[str] | None = None) -> int:
 # Main execution logic
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    # So that torchcodec can find ffmpeg on macOS
     
     # Check if running under Snakemake by looking for the 'snakemake' object
     try:
