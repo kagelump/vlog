@@ -81,7 +81,7 @@ rule transcribe:
         model=TRANSCRIBE_MODEL,
         preview_folder=PREVIEW_FOLDER,
     script:
-        "scripts/transcribe.py"
+        "../scripts/transcribe.py"
 
 
 # Rule: Clean subtitle file (convert JSON to clean SRT)
@@ -93,4 +93,4 @@ rule clean_subtitles:
     # Use Snakemake's script directive to run the cleaner as a separate script.
     # This keeps the Snakefile declarative and lets the script handle imports.
     script:
-        "scripts/srt_cleaner.py"
+        "../scripts/srt_cleaner.py"

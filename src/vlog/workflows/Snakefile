@@ -33,6 +33,10 @@ Usage:
 
 import os
 import json
+import logging
+
+logging.getLogger("asyncio").setLevel(logging.WARNING)
+logging.getLogger("pulp").setLevel(logging.WARNING)
 
 
 # Load configuration
