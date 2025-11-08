@@ -9,6 +9,8 @@ import threading
 import queue
 import time
 import logging
+import json
+import glob
 from pathlib import Path
 from typing import Optional
 from flask import Flask, jsonify, request, send_from_directory, g
@@ -309,6 +311,204 @@ def stop_auto_ingest_snakemake():
             'success': False,
             'message': 'Failed to stop auto-ingest Snakemake service'
         }), 500
+
+
+# --- Routes: Classification Results Data API ---
+
+def get_preview_folder():
+    """Get the preview folder path where JSON files are stored."""
+    # Try to get from auto-ingest service first
+    if auto_ingest_snakemake_service and auto_ingest_snakemake_service.preview_folder:
+        return Path(auto_ingest_snakemake_service.preview_folder)
+    
+    # Default to working_directory/videos/preview
+    return Path(working_directory) / 'videos' / 'preview'
+
+
+def load_all_json_results():
+    """
+    Load all video description JSON files from the preview folder.
+    
+    Returns:
+        List of dictionaries containing video metadata.
+    """
+    preview_folder = get_preview_folder()
+    
+    if not preview_folder.exists():
+        logger.warning(f"Preview folder does not exist: {preview_folder}")
+        return []
+    
+    results = []
+    json_files = glob.glob(str(preview_folder / "*.json"))
+    
+    for json_file in json_files:
+        try:
+            with open(json_file, 'r') as f:
+                data = json.load(f)
+                # Ensure required fields exist with defaults
+                if 'filename' not in data:
+                    data['filename'] = Path(json_file).stem
+                if 'keep' not in data:
+                    data['keep'] = 1  # Default to keep
+                if 'clip_cut_duration' not in data:
+                    data['clip_cut_duration'] = None
+                results.append(data)
+        except Exception as e:
+            logger.error(f"Error loading JSON file {json_file}: {e}")
+            continue
+    
+    return results
+
+
+@app.route('/api/metadata', methods=['GET'])
+def get_metadata():
+    """Get metadata for all classified videos (without base64 thumbnails)."""
+    try:
+        results = load_all_json_results()
+        
+        # Remove base64 thumbnails to reduce payload size (thumbnails served separately)
+        for result in results:
+            if 'video_thumbnail_base64' in result:
+                del result['video_thumbnail_base64']
+        
+        return jsonify(results)
+    except Exception as e:
+        logger.exception(f"Error fetching metadata: {e}")
+        return jsonify({'success': False, 'message': 'Error fetching metadata'}), 500
+
+
+@app.route('/api/update_keep', methods=['POST'])
+def update_keep():
+    """Update the keep status for a video."""
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        keep_status = data.get('keep')
+        
+        if not filename:
+            return jsonify({'success': False, 'message': 'Filename is required'}), 400
+        
+        if keep_status not in [0, 1]:
+            return jsonify({'success': False, 'message': 'Keep status must be 0 or 1'}), 400
+        
+        # Find and update the JSON file
+        preview_folder = get_preview_folder()
+        json_path = preview_folder / f"{Path(filename).stem}.json"
+        
+        if not json_path.exists():
+            return jsonify({'success': False, 'message': f'JSON file not found: {json_path}'}), 404
+        
+        # Load, update, and save
+        with open(json_path, 'r') as f:
+            video_data = json.load(f)
+        
+        video_data['keep'] = keep_status
+        video_data['last_updated'] = time.strftime('%Y-%m-%dT%H:%M:%S')
+        
+        with open(json_path, 'w') as f:
+            json.dump(video_data, f, indent=2)
+        
+        return jsonify({'success': True, 'message': 'Keep status updated'})
+    
+    except Exception as e:
+        logger.exception(f"Error updating keep status: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/update_duration', methods=['POST'])
+def update_duration():
+    """Update the clip cut duration for a video."""
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        duration = data.get('duration')
+        
+        if not filename:
+            return jsonify({'success': False, 'message': 'Filename is required'}), 400
+        
+        # Duration can be None (for full video) or a positive number
+        if duration is not None:
+            try:
+                duration = float(duration)
+                if duration < 0:
+                    return jsonify({'success': False, 'message': 'Duration must be positive or null'}), 400
+            except (TypeError, ValueError):
+                return jsonify({'success': False, 'message': 'Invalid duration value'}), 400
+        
+        # Find and update the JSON file
+        preview_folder = get_preview_folder()
+        json_path = preview_folder / f"{Path(filename).stem}.json"
+        
+        if not json_path.exists():
+            return jsonify({'success': False, 'message': f'JSON file not found: {json_path}'}), 404
+        
+        # Load, update, and save
+        with open(json_path, 'r') as f:
+            video_data = json.load(f)
+        
+        video_data['clip_cut_duration'] = duration
+        video_data['last_updated'] = time.strftime('%Y-%m-%dT%H:%M:%S')
+        
+        with open(json_path, 'w') as f:
+            json.dump(video_data, f, indent=2)
+        
+        return jsonify({'success': True, 'message': 'Duration updated'})
+    
+    except Exception as e:
+        logger.exception(f"Error updating duration: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/subtitle/<filename>', methods=['GET'])
+def get_subtitle(filename):
+    """
+    Get the subtitle file for a video.
+    
+    Security: This function validates filename to prevent path traversal.
+    """
+    try:
+        # Validate filename to prevent path traversal
+        if not filename or '/' in filename or '\\' in filename or '..' in filename:
+            return jsonify({'success': False, 'message': 'Invalid filename'}), 400
+        
+        # Look for subtitle file in preview folder
+        preview_folder = get_preview_folder()
+        
+        # Try cleaned subtitle first, then original
+        subtitle_name = Path(filename).stem
+        cleaned_srt = preview_folder / f"{subtitle_name}_cleaned.srt"
+        original_srt = preview_folder / f"{subtitle_name}.srt"
+        
+        subtitle_path = None
+        if cleaned_srt.exists():
+            subtitle_path = cleaned_srt
+        elif original_srt.exists():
+            subtitle_path = original_srt
+        
+        if not subtitle_path:
+            return jsonify({'success': False, 'message': 'Subtitle file not found'}), 404
+        
+        # Verify path is within preview folder (defense in depth)
+        try:
+            subtitle_path.resolve().relative_to(preview_folder.resolve())
+        except ValueError:
+            logger.warning(f"Path traversal attempt blocked for filename: {filename}")
+            return jsonify({'success': False, 'message': 'Invalid file path'}), 400
+        
+        # Read and return subtitle content
+        with open(subtitle_path, 'r', encoding='utf-8') as f:
+            subtitle_content = f.read()
+        
+        return jsonify({
+            'success': True,
+            'subtitle': subtitle_content,
+            'filename': subtitle_path.name
+        })
+    
+    except Exception as e:
+        logger.exception(f"Error serving subtitle for {filename}")
+        return jsonify({'success': False, 'message': 'Error loading subtitle'}), 500
+
 
 # --- Server Start ---
 if __name__ == '__main__':
