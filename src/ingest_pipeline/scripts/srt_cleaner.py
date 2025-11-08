@@ -13,7 +13,6 @@ Author: automated migration with JSON support
 import os
 import re
 import json
-from snakemake.script import snakemake
 from collections import Counter
 from typing import List, Dict
 
@@ -155,7 +154,7 @@ def format_srt_timestamp(seconds: float) -> str:
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
-    milliseconds = int((seconds % 1) * 1000)
+    milliseconds = round((seconds % 1) * 1000)  # Round instead of truncate
     
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{milliseconds:03d}"
 
@@ -202,25 +201,26 @@ def clean_subtitles(subtitles: List[Dict]) -> List[Dict]:
     Returns:
         Cleaned list of subtitle dicts
     """
-    pass1 = []
-    removed = set()
-    for sub in subtitles:
-        last_sub_text = pass1[-1]['text'] if pass1 else ""
-        if (sub['text'].strip() == last_sub_text.strip() 
-            or is_hallucination_by_repetition(sub['text'])):
-            # Skip duplicate subtitle text
-            print(f"Skipping duplicate/hallucination: {sub['start']:.2f}s {sub['text']}")
-            removed.add(sub['text'])
-            continue
-        print(f"OK subtitle text: {sub['start']:.2f}s {sub['text']}")
-        pass1.append(sub)
-    
     result = []
-    for sub in pass1:
-        if sub['text'] in removed:
-            print(f"Removing subtitle text found in removed set: {sub['start']:.2f}s {sub['text']}")
+    seen_texts = set()
+    
+    for sub in subtitles:
+        text = sub['text'].strip()
+        
+        # Skip if hallucination
+        if is_hallucination_by_repetition(text):
+            print(f"Skipping hallucination: {sub['start']:.2f}s {text}")
             continue
+        
+        # Skip if duplicate of previous subtitle
+        if text in seen_texts:
+            print(f"Skipping duplicate: {sub['start']:.2f}s {text}")
+            continue
+        
+        # Keep this subtitle
+        print(f"OK subtitle text: {sub['start']:.2f}s {text}")
         result.append(sub)
+        seen_texts.add(text)
     
     # If only one subtitle remains, return empty (likely all hallucination)
     if len(result) == 1:
@@ -243,4 +243,7 @@ def process_json_to_srt(json_file: str, srt_file: str):
 
 
 # Main entry point for Snakemake
-process_json_to_srt(snakemake.input.json, snakemake.output.cleaned)
+if __name__ == "__main__":
+    # Only import snakemake when running as a script
+    from snakemake.script import snakemake
+    process_json_to_srt(snakemake.input.json, snakemake.output.cleaned)
