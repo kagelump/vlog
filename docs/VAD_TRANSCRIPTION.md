@@ -80,7 +80,7 @@ This is a test.
 
 ```bash
 # Run the full subtitle pipeline (stage 2)
-snakemake --snakefile src/ingest_pipeline/subtitles.smk --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/subtitles.smk --cores 1 --configfile config.yaml
 ```
 
 This will:
@@ -91,14 +91,14 @@ This will:
 
 ```bash
 # With VAD (recommended)
-python src/ingest_pipeline/scripts/transcribe.py \
+python src/vlog/workflows/scripts/transcribe.py \
   --model mlx-community/whisper-large-v3-turbo \
   --input video.mp4 \
   --stem video \
   --output-dir output/
 
 # Without VAD
-python src/ingest_pipeline/scripts/transcribe.py \
+python src/vlog/workflows/scripts/transcribe.py \
   --model mlx-community/whisper-large-v3-turbo \
   --input video.mp4 \
   --stem video \

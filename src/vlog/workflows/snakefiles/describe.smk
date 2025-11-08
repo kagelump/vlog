@@ -9,10 +9,10 @@ available before any describe jobs run.
 
 Usage:
     # Run with master workflow (recommended - daemon managed automatically):
-    snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage3
+    snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml stage3
     
     # Or run independently (requires daemon to be started first):
-    snakemake --snakefile src/ingest_pipeline/snakefiles/describe.smk --cores 1 --configfile config.yaml
+    snakemake --snakefile src/vlog/workflows/snakefiles/describe.smk --cores 1 --configfile config.yaml
 
 Notes:
     - When run via master workflow, daemon is started automatically

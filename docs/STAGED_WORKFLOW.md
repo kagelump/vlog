@@ -15,7 +15,7 @@ Each stage can be run independently or all together using the master workflow.
 ## File Structure
 
 ```
-src/ingest_pipeline/
+src/vlog/workflows/
 ├── Snakefile              # Master workflow (runs all 3 stages)
 ├── Snakefile.copy         # Stage 1: Copy videos
 ├── Snakefile.subtitles    # Stage 2: Generate subtitles
@@ -33,7 +33,7 @@ Use the master Snakefile to run the complete pipeline:
 
 ```bash
 # Run all stages
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml
 
 # Or use make target
 make snakemake
@@ -43,13 +43,13 @@ You can also run specific stage targets from the master file:
 
 ```bash
 # Run only stage 1
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage1
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml stage1
 
 # Run only stage 2
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage2
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml stage2
 
 # Run only stage 3
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml stage3
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml stage3
 ```
 
 ### Option 2: Run Stages Independently
@@ -59,7 +59,7 @@ Run each stage file individually for maximum control:
 #### Stage 1: Copy Videos
 
 ```bash
-snakemake --snakefile src/ingest_pipeline/Snakefile.copy --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile.copy --cores 1 --configfile config.yaml
 ```
 
 **What it does:**
@@ -74,7 +74,7 @@ snakemake --snakefile src/ingest_pipeline/Snakefile.copy --cores 1 --configfile 
 #### Stage 2: Generate Subtitles
 
 ```bash
-snakemake --snakefile src/ingest_pipeline/Snakefile.subtitles --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile.subtitles --cores 1 --configfile config.yaml
 ```
 
 **What it does:**
@@ -92,7 +92,7 @@ snakemake --snakefile src/ingest_pipeline/Snakefile.subtitles --cores 1 --config
 #### Stage 3: Describe Videos
 
 ```bash
-snakemake --snakefile src/ingest_pipeline/Snakefile.describe --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile.describe --cores 1 --configfile config.yaml
 ```
 
 **What it does:**
@@ -120,7 +120,7 @@ Start the daemon manually before running stage 3:
 python -m vlog.describe_daemon --model mlx-community/Qwen3-VL-8B-Instruct-4bit &
 
 # Run stage 3
-snakemake --snakefile src/ingest_pipeline/Snakefile.describe --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile.describe --cores 1 --configfile config.yaml
 
 # Stop daemon when done
 pkill -f describe_daemon
@@ -131,7 +131,7 @@ pkill -f describe_daemon
 Let the workflow manage the daemon lifecycle:
 
 ```bash
-snakemake --snakefile src/ingest_pipeline/Snakefile.describe \
+snakemake --snakefile src/vlog/workflows/Snakefile.describe \
     --cores 1 \
     --configfile config.yaml \
     --config manage_daemon=true
@@ -194,7 +194,7 @@ You have videos on an SD card and want to process them completely:
 
 ```bash
 # Run all stages
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml
 ```
 
 ### Scenario 2: Staged Processing
@@ -203,14 +203,14 @@ You want to copy videos first, then process subtitles later:
 
 ```bash
 # Day 1: Copy videos
-snakemake --snakefile src/ingest_pipeline/Snakefile.copy --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile.copy --cores 1 --configfile config.yaml
 
 # Day 2: Generate subtitles
-snakemake --snakefile src/ingest_pipeline/Snakefile.subtitles --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile.subtitles --cores 1 --configfile config.yaml
 
 # Day 3: Describe videos
 python -m vlog.describe_daemon --model mlx-community/Qwen3-VL-8B-Instruct-4bit &
-snakemake --snakefile src/ingest_pipeline/Snakefile.describe --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile.describe --cores 1 --configfile config.yaml
 ```
 
 ### Scenario 3: Re-describe with Different Model
@@ -222,7 +222,7 @@ You already have videos and subtitles, but want to re-describe with a different 
 python -m vlog.describe_daemon --model mlx-community/different-model &
 
 # Re-run describe stage (will skip copy and subtitle steps)
-snakemake --snakefile src/ingest_pipeline/Snakefile.describe \
+snakemake --snakefile src/vlog/workflows/Snakefile.describe \
     --cores 1 \
     --configfile config.yaml \
     --config describe.model=mlx-community/different-model \
@@ -235,7 +235,7 @@ You have new videos on the SD card and want to process only the new ones:
 
 ```bash
 # Run all stages - Snakemake will automatically detect and process only new files
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml
 ```
 
 ## Debugging
@@ -245,7 +245,7 @@ snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile confi
 Use `--dry-run` to see what Snakemake will do:
 
 ```bash
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml --dry-run
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml --dry-run
 ```
 
 ### Force Re-run
@@ -253,7 +253,7 @@ snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile confi
 Force re-running all rules even if outputs exist:
 
 ```bash
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml --forceall
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml --forceall
 ```
 
 ### Force Specific Rule
@@ -261,7 +261,7 @@ snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile confi
 Force re-running a specific rule:
 
 ```bash
-snakemake --snakefile src/ingest_pipeline/Snakefile.describe \
+snakemake --snakefile src/vlog/workflows/Snakefile.describe \
     --cores 1 \
     --configfile config.yaml \
     --forcerun describe
@@ -296,7 +296,7 @@ snakemake --cores 1 --configfile config.yaml
 
 **New (equivalent):**
 ```bash
-snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile config.yaml
+snakemake --snakefile src/vlog/workflows/Snakefile --cores 1 --configfile config.yaml
 ```
 
 The master workflow includes all the same rules and produces the same outputs, just organized into 3 logical stages.

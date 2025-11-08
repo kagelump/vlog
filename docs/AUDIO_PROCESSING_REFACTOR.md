@@ -20,7 +20,7 @@ Replace torchaudio's audio loading/saving functionality with a combination of:
 
 ## Files Changed
 
-### 1. `src/ingest_pipeline/scripts/vad_utils.py`
+### 1. `src/vlog/workflows/scripts/vad_utils.py`
 
 **Key Changes:**
 - Replaced `import torchaudio` with `import soundfile as sf`
@@ -59,7 +59,7 @@ waveform_tensor = torch.from_numpy(waveform)
 - Removed: `torchcodec<0.8`
 - Added: `soundfile>=0.12.1`
 
-### 3. `src/ingest_pipeline/scripts/transcribe.py`
+### 3. `src/vlog/workflows/scripts/transcribe.py`
 
 **Changes:**
 - Removed obsolete comment: "So that torchcodec can find ffmpeg on macOS"

@@ -254,7 +254,7 @@ The service builds a Snakemake command similar to:
 
 ```bash
 snakemake \
-  --snakefile src/ingest_pipeline/Snakefile \
+  --snakefile src/vlog/workflows/Snakefile \
   --configfile /tmp/config_XXXXX.yaml \
   --config preview_folder=/path/to/previews \
   --logger vlog \
@@ -355,7 +355,7 @@ curl -X POST http://127.0.0.1:5556/reset
 
 **Solutions:**
 1. Check the "queued_files" count in status API
-2. Verify Snakefile exists at `src/ingest_pipeline/Snakefile`
+2. Verify Snakefile exists at `src/vlog/workflows/Snakefile`
 3. Check for errors in the Snakemake output (logged to console)
 4. Ensure the file has a supported video extension (mp4, mov, avi, mkv)
 

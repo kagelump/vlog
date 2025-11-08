@@ -3,7 +3,7 @@
 
 # Default values
 CONFIG_FILE="config.yaml"
-SNAKEFILE="src/ingest_pipeline/Snakefile"
+SNAKEFILE="src/vlog/workflows/Snakefile"
 CORES=1
 LOGGER_PORT=5556
 LOGGER_HOST="127.0.0.1"
@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --config FILE         Config file (default: config.yaml)"
-            echo "  --snakefile FILE      Snakefile (default: src/ingest_pipeline/Snakefile)"
+            echo "  --snakefile FILE      Snakefile (default: src/vlog/workflows/Snakefile)"
             echo "  --cores N             Number of cores (default: 1)"
             echo "  --logger-port PORT    Logger API port (default: 5556)"
             echo "  --logger-host HOST    Logger API host (default: 127.0.0.1)"
@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0"
             echo "  $0 --cores 4"
             echo "  $0 stage2 --cores 2"
-            echo "  $0 --snakefile src/ingest_pipeline/subtitles.smk"
+            echo "  $0 --snakefile src/vlog/workflows/snakefiles/subtitles.smk"
             exit 0
             ;;
         *)

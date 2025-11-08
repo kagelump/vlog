@@ -6,7 +6,7 @@ This stage:
 2. Cleans subtitle files (removes duplicates and hallucinations)
 
 Usage:
-    snakemake --snakefile src/ingest_pipeline/Snakefile.subtitles --cores 1 --configfile config.yaml
+    snakemake --snakefile src/vlog/workflows/Snakefile.subtitles --cores 1 --configfile config.yaml
 """
 
 import sys
@@ -16,8 +16,8 @@ from pathlib import Path
 import logging
 
 
-# Ensure parent folder (src/ingest_pipeline) is on sys.path so local modules can be imported
-# Path(__file__).parents[0] -> snakefiles, parents[1] -> ingest_pipeline
+# Ensure parent folder (src/vlog/workflows) is on sys.path so local modules can be imported
+# Path(__file__).parents[0] -> snakefiles, parents[1] -> workflows
 parent_dir = Path(__file__).resolve().parents[1]
 if str(parent_dir) not in sys.path:
     sys.path.insert(0, str(parent_dir))

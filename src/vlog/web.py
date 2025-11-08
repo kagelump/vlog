@@ -15,14 +15,16 @@ from flask import Flask, jsonify, request, send_from_directory, g
 
 from vlog.web_file_browser import browse_server_directory
 
-# Get the project root directory
+# Get the vlog package directory (for static files)
+PACKAGE_DIR = Path(__file__).parent
+# Get the project root directory (for project info API)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
 # Use environment variable for secret key, or generate a random one for development
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(24).hex())
-STATIC_DIR = PROJECT_ROOT / 'static'
+STATIC_DIR = PACKAGE_DIR / 'static'
 
 # Configure logging only if not already configured
 if not logging.getLogger().handlers:

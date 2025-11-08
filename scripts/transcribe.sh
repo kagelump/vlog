@@ -60,7 +60,7 @@ echo "Stem: $STEM"
 echo ""
 
 cd "$PROJECT_ROOT"
-uv run -- python src/ingest_pipeline/scripts/transcribe.py \
+uv run -- python src/vlog/workflows/scripts/transcribe.py \
     --model "$MODEL" \
     --input "$INPUT_FILE" \
     --stem "$STEM" \
