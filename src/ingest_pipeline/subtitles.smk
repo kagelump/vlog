@@ -76,11 +76,10 @@ rule transcribe:
     output:
         f"{PREVIEW_FOLDER}/{{stem}}.srt"
     params:
-        model=TRANSCRIBE_MODEL
-    shell:
-        """
-        mlx_whisper --model "{params.model}" -f srt --task transcribe "{input}" --output-name "{wildcards.stem}" --output-dir "{PREVIEW_FOLDER}"
-        """
+        model=TRANSCRIBE_MODEL,
+        preview_folder=PREVIEW_FOLDER
+    script:
+        "scripts/transcribe.py"
 
 
 # Rule: Clean subtitle file
