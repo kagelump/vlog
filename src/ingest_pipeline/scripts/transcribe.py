@@ -15,43 +15,44 @@ Author: automated migration
 from __future__ import annotations
 
 import logging
-import subprocess
 import sys
 import argparse
 from pathlib import Path
+from mlx_whisper import transcribe
+from mlx_whisper.cli import get_writer
+
+sm = snakemake # type: ignore
 
 
 def run_transcribe(model: str, input_path: str, stem: str, output_dir: str) -> int:
-    """Invoke mlx_whisper to transcribe a single preview file.
+    """Transcribe a single preview file using mlx_whisper Python API.
 
-    Returns the subprocess exit code.
+    Returns 0 on success, non-zero on failure.
     """
-    cmd = [
-        "mlx_whisper",
-        "--model",
-        model,
-        "-f",
-        "srt",
-        "--task",
-        "transcribe",
-        input_path,
-        "--output-name",
-        stem,
-        "--output-dir",
-        output_dir,
-    ]
-
-    logging.info("Running command: %s", " ".join(cmd))
+    logging.info("Transcribing %s with model %s", input_path, model)
+    
     try:
-        # Stream output directly to the console
-        result = subprocess.run(cmd, check=False)
-        return result.returncode
-    except FileNotFoundError:
-        logging.error("mlx_whisper binary not found. Ensure mlx_whisper is installed and on PATH.")
-        return 2
+        # Call mlx_whisper.transcribe() directly
+        result = transcribe(
+            audio=input_path,
+            path_or_hf_repo=model,
+            verbose=None,  # Don't print progress to avoid cluttering logs
+        )
+        
+        # Write output in SRT format
+        writer = get_writer("srt", output_dir)
+        
+        # Create output file with the specified stem
+        output_file = Path(output_dir) / f"{stem}.srt"
+        with open(output_file, "w", encoding="utf-8") as f:
+            writer(result, f, {"max_line_width": None, "max_line_count": None, "highlight_words": False})
+        
+        logging.info("Transcription completed: %s", output_file)
+        return 0
+        
     except Exception as e:
-        logging.exception("Error running mlx_whisper: %s", e)
-        return 3
+        logging.exception("Error during transcription: %s", e)
+        return 2
 
 
 def main_cli(argv: list[str] | None = None) -> int:
@@ -76,10 +77,10 @@ else:
     # Running under Snakemake's `script:` directive
     try:
         # `snakemake` is injected by Snakemake when using `script:`
-        model = snakemake.params.model
-        input_path = str(snakemake.input[0])
-        stem = str(snakemake.wildcards.stem)
-        output_dir = str(snakemake.params.get('output_dir', snakemake.params.get('preview_folder', '.')))
+        model = sm.params.model
+        input_path = str(sm.input[0])
+        stem = str(sm.wildcards.stem)
+        output_dir = str(sm.params.get('output_dir', sm.params.get('preview_folder', '.')))
     except NameError:
         raise RuntimeError("This script expects to be run under Snakemake or as a CLI script")
 
