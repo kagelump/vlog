@@ -5,8 +5,10 @@ This daemon loads the MLX-VLM model once at startup and provides a REST API
 for describing videos. It uses protobuf messages for the API contract.
 """
 import os
+import sys
 import time
 import logging
+import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -78,6 +80,53 @@ PROCESSING_STATE: dict = {
 }
 
 
+def monitor_parent_process(parent_pid: int, check_interval: float = 1.0):
+    """
+    Monitor parent process and exit when it dies.
+    
+    This function runs in a background thread and periodically checks if the parent
+    process is still alive. When the parent dies, it logs a message and exits.
+    
+    Args:
+        parent_pid: Parent process ID to monitor
+        check_interval: How often to check in seconds (default: 1.0)
+    """
+    import psutil
+    
+    logger.info(f"Monitoring parent process PID {parent_pid}")
+    
+    try:
+        parent = psutil.Process(parent_pid)
+        parent_name = parent.name()
+        logger.info(f"Parent process: {parent_name} (PID {parent_pid})")
+    except psutil.NoSuchProcess:
+        logger.error(f"Parent process {parent_pid} does not exist, exiting")
+        os._exit(1)
+    
+    while True:
+        time.sleep(check_interval)
+        
+        try:
+            # Check if parent process still exists
+            if not psutil.pid_exists(parent_pid):
+                logger.warning(f"Parent process {parent_pid} ({parent_name}) has died, shutting down daemon")
+                os._exit(0)
+            
+            # Additional check: verify it's the same process (not recycled PID)
+            current_parent = psutil.Process(parent_pid)
+            if current_parent.create_time() != parent.create_time():
+                logger.warning(f"Parent process PID {parent_pid} was recycled, shutting down daemon")
+                os._exit(0)
+                
+        except psutil.NoSuchProcess:
+            logger.warning(f"Parent process {parent_pid} ({parent_name}) no longer exists, shutting down daemon")
+            os._exit(0)
+        except Exception as e:
+            logger.error(f"Error checking parent process: {e}")
+            # Don't exit on monitoring errors, just log them
+            pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage model lifecycle - load on startup, cleanup on shutdown."""
@@ -97,6 +146,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
         raise
+    
+    # Start parent process monitor if PARENT_PID is set
+    parent_pid_str = os.environ.get("PARENT_PID")
+    if parent_pid_str:
+        try:
+            parent_pid = int(parent_pid_str)
+            monitor_thread = threading.Thread(
+                target=monitor_parent_process,
+                args=(parent_pid,),
+                daemon=True,
+                name="ParentMonitor"
+            )
+            monitor_thread.start()
+            logger.info(f"Started parent process monitor for PID {parent_pid}")
+        except ValueError:
+            logger.warning(f"Invalid PARENT_PID: {parent_pid_str}, skipping parent monitoring")
+    else:
+        logger.info("PARENT_PID not set, parent process monitoring disabled")
     
     yield
     

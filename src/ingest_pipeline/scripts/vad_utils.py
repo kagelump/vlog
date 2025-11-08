@@ -119,8 +119,7 @@ def get_speech_segments(
         
     except Exception as e:
         logging.error(f"Failed to detect speech segments in {audio_path}: {e}")
-        # Return empty list on error - will transcribe entire file
-        return []
+        raise e
 
 
 def extract_audio_segment(

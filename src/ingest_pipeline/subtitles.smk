@@ -24,9 +24,8 @@ if str(parent_dir) not in sys.path:
 
 logging.basicConfig(level=logging.DEBUG)
 
-# Load configuration
-configfile: "config.yaml"
-
+# Configuration is inherited from the main Snakefile that includes this file
+# DO NOT use configfile directive here - it would reload config and lose command-line overrides
 
 # Get output folders from config
 PREVIEW_FOLDER = config.get("preview_folder", "videos/preview")
@@ -70,15 +69,17 @@ rule subtitles_all:
 
 # Rule: Transcribe preview file to generate JSON with word timestamps
 rule transcribe:
-    threads: 2
+    resources:
+        mem_gb=4
     input:
         f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}"
     output:
         f"{PREVIEW_FOLDER}/{{stem}}_whisper.json"
+    log:
+        "logs/transcribe/{stem}.log"
     params:
         model=TRANSCRIBE_MODEL,
         preview_folder=PREVIEW_FOLDER,
-        use_vad=True  # Enable VAD by default for better accuracy
     script:
         "scripts/transcribe.py"
 

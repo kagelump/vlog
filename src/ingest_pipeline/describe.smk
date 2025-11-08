@@ -26,9 +26,8 @@ import glob
 import os
 
 
-# Load configuration
-configfile: "config.yaml"
-
+# Configuration is inherited from the main Snakefile that includes this file
+# DO NOT use configfile directive here - it would reload config and lose command-line overrides
 
 # Get output folders from config
 PREVIEW_FOLDER = config.get("preview_folder", "videos/preview")

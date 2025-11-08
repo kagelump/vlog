@@ -18,24 +18,25 @@ CLI usage:
 
 Author: automated migration with VAD integration
 """
-from __future__ import annotations
 
 import logging
 import sys
 import argparse
 import json
 from pathlib import Path
-from mlx_whisper import transcribe
-from mlx_whisper.cli import get_writer
-from vad_utils import get_speech_segments, load_vad_model
+from typing import List, Dict
 
-sm = snakemake # type: ignore
+import os
+os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = "/opt/homebrew/lib"
+
+from mlx_whisper import transcribe
+from vad_utils import get_speech_segments, load_vad_model
 
 
 def merge_transcription_segments(
-    vad_segments: list[dict],
-    transcription_results: list[dict]
-) -> dict:
+    vad_segments: List[Dict],
+    transcription_results: List[Dict]
+) -> Dict:
     """
     Merge multiple transcription results from VAD segments into a single result.
     
@@ -86,7 +87,6 @@ def run_transcribe(
     input_path: str,
     stem: str,
     output_dir: str,
-    use_vad: bool = True
 ) -> int:
     """Transcribe a single preview file using mlx_whisper Python API with optional VAD.
 
@@ -95,12 +95,11 @@ def run_transcribe(
         input_path: Path to input video/audio file
         stem: Output filename stem (without extension)
         output_dir: Directory to write output JSON
-        use_vad: Whether to use Silero VAD for speech detection (default: True)
 
     Returns:
         0 on success, non-zero on failure.
     """
-    logging.info("Transcribing %s with model %s (VAD: %s)", input_path, model, use_vad)
+    logging.info("Transcribing %s with model %s", input_path, model)
     
     try:
         # Load VAD model if enabled
@@ -108,18 +107,17 @@ def run_transcribe(
         vad_utils = None
         speech_segments = []
         
-        if use_vad:
-            logging.info("Loading Silero VAD model...")
-            vad_model, vad_utils = load_vad_model()
-            
-            # Detect speech segments
-            logging.info("Detecting speech segments...")
-            speech_segments = get_speech_segments(
-                input_path,
-                vad_model=vad_model,
-                vad_utils=vad_utils
-            )
-            logging.info(f"Detected {len(speech_segments)} speech segments")
+        logging.info("Loading Silero VAD model...")
+        vad_model, vad_utils = load_vad_model()
+        
+        # Detect speech segments
+        logging.info("Detecting speech segments...")
+        speech_segments = get_speech_segments(
+            input_path,
+            vad_model=vad_model,
+            vad_utils=vad_utils
+        )
+        logging.info(f"Detected {len(speech_segments)} speech segments")
         
         # Transcribe based on VAD results
         if speech_segments:
@@ -144,14 +142,17 @@ def run_transcribe(
             # Merge results from all segments
             final_result = merge_transcription_segments(speech_segments, transcription_results)
         else:
-            # Transcribe entire file without VAD
-            logging.info("Transcribing full audio (no VAD segments detected or VAD disabled)...")
-            final_result = transcribe(
-                audio=input_path,
-                path_or_hf_repo=model,
-                verbose=None,
-                word_timestamps=True,  # Enable for richer metadata
+            # No speech segments detected (or we are assuming silence for this run).
+            # Instead of calling the model, return an empty transcription result
+            # so downstream steps get a valid JSON with zero segments.
+            logging.info(
+                "No speech segments detected — writing empty transcription result instead of calling model"
             )
+            final_result = {
+                "text": "",
+                "segments": [],
+                "language": "unknown",
+            }
         
         # Write output in JSON format
         output_file = Path(output_dir) / f"{stem}_whisper.json"
@@ -168,7 +169,7 @@ def run_transcribe(
         return 2
 
 
-def main_cli(argv: list[str] | None = None) -> int:
+def main_cli(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Transcribe a single preview video to JSON using mlx_whisper with VAD"
     )
@@ -176,47 +177,34 @@ def main_cli(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", required=True, help="Input video path")
     parser.add_argument("--stem", required=True, help="Output stem/name (no extension)")
     parser.add_argument("--output-dir", required=True, help="Directory to write output JSON")
-    parser.add_argument(
-        "--use-vad",
-        action="store_true",
-        default=True,
-        help="Use Silero VAD for speech detection (default: True)"
-    )
-    parser.add_argument(
-        "--no-vad",
-        dest="use_vad",
-        action="store_false",
-        help="Disable VAD and transcribe full audio"
-    )
 
     args = parser.parse_args(argv)
     return run_transcribe(
-        args.model, args.input, args.stem, args.output_dir, args.use_vad
+        args.model, args.input, args.stem, args.output_dir
     )
 
 
-# Support being invoked as a Snakemake script: the runtime will provide a
-# `snakemake` object with `.params`, `.input`, `.wildcards`, etc.
+# Main execution logic
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    # If called directly, act as CLI
-    rc = main_cli()
-    sys.exit(rc)
-else:
-    # Running under Snakemake's `script:` directive
+    # So that torchcodec can find ffmpeg on macOS
+    
+    # Check if running under Snakemake by looking for the 'snakemake' object
     try:
-        # `snakemake` is injected by Snakemake when using `script:`
+        sm = snakemake  # type: ignore # noqa: F821
+        # Running under Snakemake's `script:` directive
         model = sm.params.model
         input_path = str(sm.input[0])
         stem = str(sm.wildcards.stem)
         output_dir = str(sm.params.get('output_dir', sm.params.get('preview_folder', '.')))
-        use_vad = sm.params.get('use_vad', True)  # Default to True
+        
+        # Ensure output directory exists
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        exit_code = run_transcribe(model, input_path, stem, output_dir)
+        if exit_code != 0:
+            raise SystemExit(exit_code)
     except NameError:
-        raise RuntimeError("This script expects to be run under Snakemake or as a CLI script")
-
-    # Ensure output directory exists
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    exit_code = run_transcribe(model, input_path, stem, output_dir, use_vad)
-    if exit_code != 0:
-        raise SystemExit(exit_code)
+        # Not running under Snakemake, use CLI arguments
+        rc = main_cli()
+        sys.exit(rc)

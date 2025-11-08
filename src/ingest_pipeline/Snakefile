@@ -105,11 +105,17 @@ rule all:
 #         expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()),
 #         expand(f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}", stem=discover_videos())
 
+# Pre-compute the list of files for stage2
+# Use VIDEO_STEMS from subtitles.smk (already computed during include)
+STAGE2_TARGETS = [f"{PREVIEW_FOLDER}/{stem}_cleaned.srt" for stem in VIDEO_STEMS]
 
 rule stage2:
     """Run only Stage 2: Generate and clean subtitles"""
     input:
-        expand(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt", stem=discover_preview_videos())
+        STAGE2_TARGETS
+    run:
+        import sys
+        print(f"[stage2] Requested {len(input)} files", file=sys.stderr)
 
 
 rule stage3:
