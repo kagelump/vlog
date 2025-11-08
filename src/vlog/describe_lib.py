@@ -66,11 +66,89 @@ def render_prompt(template_text: str, subtitle: str | None) -> str:
 
 
 def load_subtitle_file(path: str) -> str | None:
-    """Load subtitle file if it exists."""
+    """Load subtitle file and convert to compact format if it exists.
+    
+    Converts SRT format to compact timestamp format:
+    [HH:MM:SS] Transcript text.
+    
+    Args:
+        path: Path to the subtitle file (SRT format)
+        
+    Returns:
+        Compact formatted subtitle text or None if file doesn't exist
+    """
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
-            return f.read()
+            srt_content = f.read()
+        return convert_srt_to_compact(srt_content)
     return None
+
+
+def convert_srt_to_compact(srt_text: str) -> str:
+    """Convert SRT format to compact timestamp format.
+    
+    Input (SRT format):
+        1
+        00:00:15,000 --> 00:00:23,000
+        Now we look at the key components of the VLM architecture.
+        
+        2
+        00:00:23,000 --> 00:00:30,000
+        The Visual Encoder handles all the video frames.
+    
+    Output (compact format):
+        [00:00:15] Now we look at the key components of the VLM architecture.
+        [00:00:23] The Visual Encoder handles all the video frames.
+    
+    Args:
+        srt_text: SRT formatted subtitle text
+        
+    Returns:
+        Compact formatted subtitle text
+    """
+    lines = srt_text.strip().split('\n')
+    compact_lines = []
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Skip empty lines
+        if not line:
+            i += 1
+            continue
+            
+        # Skip sequence numbers (lines that are just digits)
+        if line.isdigit():
+            i += 1
+            continue
+        
+        # Check if this is a timestamp line (contains -->)
+        if '-->' in line:
+            # Extract start timestamp (before -->)
+            timestamp_part = line.split('-->')[0].strip()
+            # Convert from 00:00:15,000 to [00:00:15]
+            timestamp = timestamp_part.split(',')[0]
+            
+            # Collect all text lines until we hit an empty line or next sequence number
+            text_lines = []
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].strip()
+                # Stop at empty line or digit (next subtitle sequence)
+                if not next_line or (next_line.isdigit() and i + 1 < len(lines) and '-->' in lines[i + 1]):
+                    break
+                text_lines.append(next_line)
+                i += 1
+            
+            # Combine multiple text lines with space
+            if text_lines:
+                text = ' '.join(text_lines)
+                compact_lines.append(f'[{timestamp}] {text}')
+        else:
+            i += 1
+    
+    return '\n'.join(compact_lines)
 
 
 def validate_model_output(parsed: Any) -> dict:
