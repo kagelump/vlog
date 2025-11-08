@@ -102,6 +102,9 @@ class AutoIngestSnakemakeService:
         self._snakemake_process: Optional[subprocess.Popen] = None
         self._snakemake_lock = threading.Lock()
         
+        # Thread for scanning existing files
+        self._scan_thread: Optional[threading.Thread] = None
+        
         logger.info(f"AutoIngestSnakemakeService initialized")
         logger.info(f"  Watch directory: {self.watch_directory}")
         logger.info(f"  Preview folder: {self.preview_folder}")
@@ -153,6 +156,9 @@ class AutoIngestSnakemakeService:
             return False
         
         try:
+            # Set flag to stop background operations
+            self.is_running = False
+            
             # Stop the observer
             if self.observer:
                 self.observer.stop()
@@ -177,7 +183,6 @@ class AutoIngestSnakemakeService:
                     finally:
                         self._snakemake_process = None
             
-            self.is_running = False
             logger.info("Auto-ingest service stopped")
             return True
         except Exception as e:

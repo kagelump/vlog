@@ -83,6 +83,27 @@ def validate_model_output(parsed: Any) -> dict:
     return obj.model_dump()
 
 
+def augment_model_output(validated: dict, fps: float) -> dict:
+    """Return an augmented copy of the validated model output.
+
+    Currently this synthesizes a `thumbnail_timestamp` field from
+    `thumbnail_frame` and `fps`. The function returns a shallow copy of
+    the input dict with the added field. If timestamp generation fails
+    the field will be set to None.
+    """
+    out = dict(validated)
+    try:
+        tf = out.get('thumbnail_frame')
+        if tf is not None:
+            out['thumbnail_timestamp'] = frame_to_timestamp(int(tf), fps)
+        else:
+            out['thumbnail_timestamp'] = None
+    except Exception:
+        out['thumbnail_timestamp'] = None
+
+    return out
+
+
 def describe_video(
     model,
     processor,
@@ -187,7 +208,7 @@ def describe_video(
     # validate and return structured output
     try:
         validated = validate_model_output(parsed)
-        return validated
+        return augment_model_output(validated, fps)
     except ValidationError as e:
         # return raw parsed JSON but surface validation error in message
         raise Exception(f'Output did not match expected schema: {e}\nRaw: {parsed}')
@@ -223,3 +244,32 @@ def calculate_adaptive_fps(video_length: float, base_fps: float) -> float:
     if video_length > 300:
         fps = fps / 2.0
     return fps
+
+
+def frame_to_timestamp(frame: int, fps: float) -> str:
+    """Convert a frame index and fps into an HH:MM:SS.sss timestamp string.
+
+    Args:
+        frame: Frame index (integer, zero-based assumed).
+        fps: Frames per second used to sample the video. Must be > 0.
+
+    Returns:
+        A string formatted as HH:MM:SS.sss (hours, minutes, seconds with
+        millisecond precision).
+    """
+    # Guard against division by zero
+    try:
+        fps_val = float(fps) if fps else 0.0
+    except Exception:
+        fps_val = 0.0
+
+    total_seconds = 0.0
+    if fps_val > 0:
+        total_seconds = float(frame) / fps_val
+
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
+    seconds = total_seconds % 60
+
+    # Format seconds with 3 decimal places (milliseconds)
+    return f"{hours:02d}:{minutes:02d}:{seconds:06.3f}"
