@@ -9,7 +9,7 @@ This workflow:
 3. Copies existing preview files or creates new ones
 
 Usage:
-    snakemake --snakefile src/ingest_pipeline/Snakefile.copy --cores 1 --configfile config.yaml
+    snakemake --snakefile src/vlog/workflows/Snakefile.copy --cores 1 --configfile config.yaml
 """
 
 import os
@@ -39,7 +39,7 @@ PREVIEW_PRESET = PREVIEW_SETTINGS.get("preset", "medium")
 # Discover videos on SD card
 def discover_videos():
     """Discover video files on the SD card."""
-    script_path = "src/ingest_pipeline/scripts/discover_videos.py"
+    script_path = "src/vlog/workflows/scripts/discover_videos.py"
     extensions_json = json.dumps(VIDEO_EXTENSIONS)
     
     cmd = ["python3", script_path, SD_CARD, extensions_json, PREVIEW_SUFFIX]
@@ -131,7 +131,7 @@ rule copy_or_create_preview:
                 print(f"Creating preview file from: {input.main}")
                 cmd = [
                     "python3",
-                    "src/ingest_pipeline/create_preview.py",
+                    "src/vlog/workflows/scripts/create_preview.py",
                     input.main,
                     output[0],
                     str(PREVIEW_WIDTH),

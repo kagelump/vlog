@@ -74,16 +74,16 @@ DAEMON_LOG_FILE = config.get("daemon_log_file", "logs/daemon.log")
 # Note: Each stage file has its own discovery function and rules
 
 # Stage 1: Copy videos from SD card
-# include: "copy.smk"
+# include: "snakefiles/copy.smk"
 
 # Stage 2: Generate and clean subtitles  
-include: "subtitles.smk"
+include: "snakefiles/subtitles.smk"
 
 # Stage 3: Describe videos
-include: "describe.smk"
+include: "snakefiles/describe.smk"
 
 # Daemon management
-include: "daemon.smk"
+include: "snakefiles/daemon.smk"
 
 # Default target - runs all stages
 rule all:

@@ -16,7 +16,7 @@ import soundfile as sf
 
 # Add project paths
 project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root / "src" / "ingest_pipeline" / "scripts"))
+sys.path.insert(0, str(project_root / "src" / "vlog" / "workflows" / "scripts"))
 
 # Import without torch to test standalone functionality
 import importlib.util
@@ -24,7 +24,7 @@ import importlib.util
 # Load vad_utils module manually to check functions
 spec = importlib.util.spec_from_file_location(
     "vad_utils",
-    project_root / "src" / "ingest_pipeline" / "scripts" / "vad_utils.py"
+    project_root / "src" / "vlog" / "workflows" / "scripts" / "vad_utils.py"
 )
 
 def test_audio_processing():

@@ -16,10 +16,10 @@ from mlx_vlm.video_generate import process_vision_info
 import mlx.core as mx
 
 
-# Locate prompts directory relative to this file
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-DEFAULT_PROMPT_PATH = os.path.join(ROOT_DIR, 'prompts', 'describe_v1.md')
-DEFAULT_PROMPT_META = os.path.join(ROOT_DIR, 'prompts', 'describe_v1.yaml')
+# Locate prompts directory relative to this file (now in the package)
+PACKAGE_DIR = os.path.dirname(__file__)
+DEFAULT_PROMPT_PATH = os.path.join(PACKAGE_DIR, 'prompts', 'describe_v1.md')
+DEFAULT_PROMPT_META = os.path.join(PACKAGE_DIR, 'prompts', 'describe_v1.yaml')
 
 
 class Segment(BaseModel):

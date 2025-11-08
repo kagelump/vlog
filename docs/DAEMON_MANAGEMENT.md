@@ -9,14 +9,14 @@ The video description workflow uses a daemon process to efficiently process mult
 The daemon management is split into several components:
 
 ### 1. daemon.smk (Snakemake Rules)
-Located at: `src/ingest_pipeline/snakefiles/daemon.smk`
+Located at: `src/vlog/workflows/snakefiles/daemon.smk`
 
 Defines Snakemake rules for:
 - `start_daemon`: Starts the describe daemon and creates a signal file
 - `stop_daemon`: Stops the daemon and cleans up
 
 ### 2. Start Script
-Located at: `src/ingest_pipeline/start_daemon.sh`
+Located at: `src/vlog/workflows/start_daemon.sh`
 
 Bash script that:
 - Starts the daemon process in the background using `nohup`
@@ -26,7 +26,7 @@ Bash script that:
 - Creates a signal file (`status/daemon_running.signal`) when ready
 
 ### 3. Stop Script
-Located at: `src/ingest_pipeline/stop_daemon.sh`
+Located at: `src/vlog/workflows/stop_daemon.sh`
 
 Bash script that:
 - Reads the daemon PID from the PID file
@@ -51,7 +51,7 @@ When running the full pipeline or stage 3, the daemon is automatically managed:
 
 ```bash
 # This will automatically start the daemon before stage 3
-snakemake --snakefile src/ingest_pipeline/snakefiles/Snakefile --cores 1 --configfile config.yaml stage3
+snakemake --snakefile src/vlog/workflows/snakefiles/Snakefile --cores 1 --configfile config.yaml stage3
 ```
 
 The workflow ensures:
@@ -84,12 +84,12 @@ You can also manage the daemon manually for testing or debugging:
 
 ### Start Daemon
 ```bash
-snakemake --snakefile src/ingest_pipeline/snakefiles/daemon.smk --cores 1 --configfile config.yaml start_daemon
+snakemake --snakefile src/vlog/workflows/snakefiles/daemon.smk --cores 1 --configfile config.yaml start_daemon
 ```
 
 ### Stop Daemon
 ```bash
-snakemake --snakefile src/ingest_pipeline/snakefiles/daemon.smk --cores 1 --configfile config.yaml stop_daemon
+snakemake --snakefile src/vlog/workflows/snakefiles/daemon.smk --cores 1 --configfile config.yaml stop_daemon
 ```
 
 ### Check if Daemon is Running

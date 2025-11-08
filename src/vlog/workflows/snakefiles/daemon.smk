@@ -9,10 +9,10 @@ that other rules can depend on to ensure the daemon is running.
 
 Usage:
     # Start daemon (usually called automatically by stage 3)
-    snakemake --snakefile src/ingest_pipeline/snakefiles/daemon.smk --cores 1 start_daemon
+    snakemake --snakefile src/vlog/workflows/snakefiles/daemon.smk --cores 1 start_daemon
     
     # Stop daemon (cleanup)
-    snakemake --snakefile src/ingest_pipeline/snakefiles/daemon.smk --cores 1 stop_daemon
+    snakemake --snakefile src/vlog/workflows/snakefiles/daemon.smk --cores 1 stop_daemon
 """
 
 import os

@@ -39,8 +39,8 @@ def main():
     )
     parser.add_argument(
         "--snakefile",
-        default="src/ingest_pipeline/Snakefile",
-        help="Snakefile to run (default: src/ingest_pipeline/Snakefile)"
+        default="src/vlog/workflows/Snakefile",
+        help="Snakefile to run (default: src/vlog/workflows/Snakefile)"
     )
     parser.add_argument(
         "--configfile",

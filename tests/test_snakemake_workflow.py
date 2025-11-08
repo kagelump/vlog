@@ -34,7 +34,7 @@ class TestDiscoverVideos(unittest.TestCase):
     
     def test_discover_videos_with_preview(self):
         """Test discovering videos with preview files."""
-        script_path = Path(__file__).parent.parent / "src" / "ingest_pipeline" / "discover_videos.py"
+        script_path = Path(__file__).parent.parent / "src" / "vlog" / "workflows" / "scripts" / "discover_videos.py"
         
         import subprocess
         result = subprocess.run(
@@ -78,7 +78,7 @@ class TestCreatePreview(unittest.TestCase):
     
     def test_create_preview_validates_input(self):
         """Test that create_preview validates input file exists."""
-        script_path = Path(__file__).parent.parent / "src" / "ingest_pipeline" / "create_preview.py"
+        script_path = Path(__file__).parent.parent / "src" / "vlog" / "workflows" / "scripts" / "create_preview.py"
         
         import subprocess
         result = subprocess.run(
@@ -102,7 +102,7 @@ class TestDescribeToJson(unittest.TestCase):
     
     def test_script_exists_and_executable(self):
         """Test that the script exists and is executable."""
-        script_path = Path(__file__).parent.parent / "src" / "ingest_pipeline" / "describe_to_json.py"
+        script_path = Path(__file__).parent.parent / "src" / "vlog" / "workflows" / "scripts" / "describe_to_json.py"
         
         self.assertTrue(script_path.exists())
         # Check it's a Python script
@@ -112,7 +112,7 @@ class TestDescribeToJson(unittest.TestCase):
     
     def test_describe_to_json_usage(self):
         """Test that script shows usage when called without args."""
-        script_path = Path(__file__).parent.parent / "src" / "ingest_pipeline" / "describe_to_json.py"
+        script_path = Path(__file__).parent.parent / "src" / "vlog" / "workflows" / "scripts" / "describe_to_json.py"
         
         import subprocess
         result = subprocess.run(
@@ -156,12 +156,12 @@ class TestSnakefile(unittest.TestCase):
     
     def test_snakefile_exists(self):
         """Test that the master Snakefile exists."""
-        snakefile_path = Path("src/ingest_pipeline/Snakefile")
+        snakefile_path = Path("src/vlog/workflows/Snakefile")
         self.assertTrue(snakefile_path.exists())
     
     def test_snakefile_syntax(self):
         """Test that the master Snakefile has valid syntax."""
-        snakefile_path = Path("src/ingest_pipeline/Snakefile")
+        snakefile_path = Path("src/vlog/workflows/Snakefile")
         with open(snakefile_path) as f:
             content = f.read()
             # Basic syntax check - should contain key Snakemake keywords
@@ -171,9 +171,9 @@ class TestSnakefile(unittest.TestCase):
     def test_stage_snakefiles_exist(self):
         """Test that all stage Snakefiles exist."""
         stage_files = [
-            "src/ingest_pipeline/Snakefile.copy",
-            "src/ingest_pipeline/Snakefile.subtitles",
-            "src/ingest_pipeline/Snakefile.describe"
+            "src/vlog/workflows/Snakefile.copy",
+            "src/vlog/workflows/Snakefile.subtitles",
+            "src/vlog/workflows/Snakefile.describe"
         ]
         for snakefile in stage_files:
             with self.subTest(snakefile=snakefile):
@@ -182,9 +182,9 @@ class TestSnakefile(unittest.TestCase):
     def test_stage_snakefiles_syntax(self):
         """Test that stage Snakefiles have valid syntax."""
         stage_files = {
-            "src/ingest_pipeline/Snakefile.copy": "copy_all",
-            "src/ingest_pipeline/Snakefile.subtitles": "subtitles_all",
-            "src/ingest_pipeline/Snakefile.describe": "describe_all"
+            "src/vlog/workflows/Snakefile.copy": "copy_all",
+            "src/vlog/workflows/Snakefile.subtitles": "subtitles_all",
+            "src/vlog/workflows/Snakefile.describe": "describe_all"
         }
         for snakefile, rule_name in stage_files.items():
             with self.subTest(snakefile=snakefile):
@@ -195,7 +195,7 @@ class TestSnakefile(unittest.TestCase):
     
     def test_master_includes_stage_files(self):
         """Test that master Snakefile includes all stage files."""
-        snakefile_path = Path("src/ingest_pipeline/Snakefile")
+        snakefile_path = Path("src/vlog/workflows/Snakefile")
         with open(snakefile_path) as f:
             content = f.read()
             self.assertIn('include: "Snakefile.copy"', content)
