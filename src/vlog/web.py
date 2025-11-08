@@ -332,22 +332,32 @@ def load_all_json_results():
     Returns:
         List of dictionaries containing video metadata.
     """
-    preview_folder = get_preview_folder()
+    preview_folder = get_preview_folder().resolve()
     
     if not preview_folder.exists():
         logger.warning(f"Preview folder does not exist: {preview_folder}")
         return []
     
     results = []
-    json_files = glob.glob(str(preview_folder / "*.json"))
+    # Use glob to find JSON files, then validate each path
+    json_pattern = str(preview_folder / "*.json")
+    json_files = glob.glob(json_pattern)
     
     for json_file in json_files:
         try:
-            with open(json_file, 'r') as f:
+            # Resolve and validate the path is within preview folder (defense in depth)
+            json_path = Path(json_file).resolve()
+            try:
+                json_path.relative_to(preview_folder)
+            except ValueError:
+                logger.warning(f"Skipping file outside preview folder: {json_file}")
+                continue
+            
+            with open(json_path, 'r') as f:
                 data = json.load(f)
                 # Ensure required fields exist with defaults
                 if 'filename' not in data:
-                    data['filename'] = Path(json_file).stem
+                    data['filename'] = json_path.stem
                 if 'keep' not in data:
                     data['keep'] = 1  # Default to keep
                 if 'clip_cut_duration' not in data:
@@ -388,15 +398,28 @@ def update_keep():
         if not filename:
             return jsonify({'success': False, 'message': 'Filename is required'}), 400
         
+        # Validate filename to prevent path traversal
+        if '/' in filename or '\\' in filename or '..' in filename:
+            return jsonify({'success': False, 'message': 'Invalid filename'}), 400
+        
         if keep_status not in [0, 1]:
             return jsonify({'success': False, 'message': 'Keep status must be 0 or 1'}), 400
         
         # Find and update the JSON file
-        preview_folder = get_preview_folder()
-        json_path = preview_folder / f"{Path(filename).stem}.json"
+        preview_folder = get_preview_folder().resolve()
+        # Use only the stem (filename without extension) to prevent path traversal
+        safe_stem = Path(filename).stem
+        json_path = (preview_folder / f"{safe_stem}.json").resolve()
+        
+        # Verify the resolved path is within the preview folder (defense in depth)
+        try:
+            json_path.relative_to(preview_folder)
+        except ValueError:
+            logger.warning(f"Path traversal attempt blocked for filename: {filename}")
+            return jsonify({'success': False, 'message': 'Invalid file path'}), 400
         
         if not json_path.exists():
-            return jsonify({'success': False, 'message': f'JSON file not found: {json_path}'}), 404
+            return jsonify({'success': False, 'message': 'JSON file not found'}), 404
         
         # Load, update, and save
         with open(json_path, 'r') as f:
@@ -412,7 +435,7 @@ def update_keep():
     
     except Exception as e:
         logger.exception(f"Error updating keep status: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': 'Error updating keep status'}), 500
 
 
 @app.route('/api/update_duration', methods=['POST'])
@@ -426,6 +449,10 @@ def update_duration():
         if not filename:
             return jsonify({'success': False, 'message': 'Filename is required'}), 400
         
+        # Validate filename to prevent path traversal
+        if '/' in filename or '\\' in filename or '..' in filename:
+            return jsonify({'success': False, 'message': 'Invalid filename'}), 400
+        
         # Duration can be None (for full video) or a positive number
         if duration is not None:
             try:
@@ -436,11 +463,20 @@ def update_duration():
                 return jsonify({'success': False, 'message': 'Invalid duration value'}), 400
         
         # Find and update the JSON file
-        preview_folder = get_preview_folder()
-        json_path = preview_folder / f"{Path(filename).stem}.json"
+        preview_folder = get_preview_folder().resolve()
+        # Use only the stem (filename without extension) to prevent path traversal
+        safe_stem = Path(filename).stem
+        json_path = (preview_folder / f"{safe_stem}.json").resolve()
+        
+        # Verify the resolved path is within the preview folder (defense in depth)
+        try:
+            json_path.relative_to(preview_folder)
+        except ValueError:
+            logger.warning(f"Path traversal attempt blocked for filename: {filename}")
+            return jsonify({'success': False, 'message': 'Invalid file path'}), 400
         
         if not json_path.exists():
-            return jsonify({'success': False, 'message': f'JSON file not found: {json_path}'}), 404
+            return jsonify({'success': False, 'message': 'JSON file not found'}), 404
         
         # Load, update, and save
         with open(json_path, 'r') as f:
@@ -456,7 +492,7 @@ def update_duration():
     
     except Exception as e:
         logger.exception(f"Error updating duration: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': 'Error updating duration'}), 500
 
 
 @app.route('/api/subtitle/<filename>', methods=['GET'])
