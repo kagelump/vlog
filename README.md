@@ -4,17 +4,32 @@ The project follows modern Python project organization conventions:
 
 ```
 vlog/
-├── src/vlog/          # Main Python package
-│   ├── db.py          # Database operations
-│   ├── video.py       # Video processing utilities
-│   ├── describe.py    # Video description using ML models
-│   ├── web.py         # Flask web server
-│   └── ...            # Other modules
-├── scripts/           # Executable shell scripts
-│   └── ingest.sh      # Main ingestion pipeline
-├── static/            # Web assets
-│   └── index.html     # Web UI
-├── third_party/       # External dependencies
+├── src/vlog/                    # Main Python package
+│   ├── workflows/               # Snakemake workflows for video ingestion
+│   │   ├── Snakefile            # Master workflow orchestrator
+│   │   ├── snakefiles/          # Individual stage workflows (.smk files)
+│   │   └── scripts/             # Workflow helper scripts
+│   ├── static/                  # Web UI assets
+│   │   ├── index.html           # Results viewer
+│   │   └── launcher/            # Launcher UI
+│   ├── prompts/                 # AI model prompts
+│   ├── snakemake_logger_plugin/ # Status logger plugin
+│   ├── web.py                   # Flask web server
+│   ├── video.py                 # Video processing utilities
+│   ├── describe_lib.py          # Video description using ML models
+│   ├── describe_daemon.py       # FastAPI service for descriptions
+│   ├── auto_ingest_snakemake.py # Auto-ingest with Snakemake
+│   └── ...                      # Other modules
+├── scripts/                     # User-facing executable scripts
+│   ├── ingest.sh                # Manual ingestion pipeline
+│   ├── launch_web.sh            # Start web UI
+│   └── ...                      # Other utility scripts
+├── examples/                    # Example configurations
+│   └── config.yaml              # Example workflow config
+├── tests/                       # Test suite
+├── docs/                        # Documentation
+├── config.yaml                  # Working config (not in git)
+├── pyproject.toml               # Project dependencies and metadata
 └── README.md
 ```
 
