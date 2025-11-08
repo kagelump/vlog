@@ -335,6 +335,6 @@ JSON outputs are compatible with the DaVinci Resolve importer. Simply point the 
 
 ## See Also
 
-- [Main README](README.md) - General project documentation
-- [Auto-Ingest Documentation](docs/AUTO_INGEST.md) - Alternative ingestion method
-- [DaVinci Integration](docs/DAVINCI_INTEGRATION.md) - Using results with DaVinci Resolve
+- [Main README](../README.md) - General project documentation
+- [Auto-Ingest Documentation](AUTO_INGEST_SNAKEMAKE.md) - Automatic video ingestion
+- [DaVinci Integration](DAVINCI_INTEGRATION.md) - Using results with DaVinci Resolve
