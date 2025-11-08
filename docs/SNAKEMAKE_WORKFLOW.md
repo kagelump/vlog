@@ -31,12 +31,7 @@ The Snakemake workflow automates the complete video ingestion pipeline:
    uv sync
    ```
 
-2. Or using pip:
-   ```bash
-   pip install snakemake>=8.0.0
-   ```
-
-3. Ensure ffmpeg is installed:
+2. Ensure ffmpeg is installed:
    ```bash
    # macOS
    brew install ffmpeg
@@ -276,8 +271,9 @@ sudo apt-get install ffmpeg
 
 **Solution:**
 ```bash
-# Install mlx-whisper
-pip install mlx-whisper
+# Install mlx-whisper using uv
+uv add mlx-whisper
+uv sync
 ```
 
 ### Model Download Issues

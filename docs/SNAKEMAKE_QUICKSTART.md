@@ -9,22 +9,16 @@ This guide walks you through using the Snakemake workflow to ingest videos from 
    cd /path/to/vlog
    
    # Using uv (recommended):
-   uv add snakemake pyyaml
+   uv add snakemake pyyaml mlx-whisper
    uv sync
-   
-   # Or using pip:
-   pip install snakemake pyyaml
    ```
 
-2. **Ensure ffmpeg and mlx_whisper are installed:**
+2. **Ensure ffmpeg is installed:**
    ```bash
    # Install ffmpeg
    brew install ffmpeg  # macOS
    # or
    sudo apt-get install ffmpeg  # Ubuntu/Debian
-   
-   # Install mlx_whisper
-   pip install mlx-whisper
    ```
 
 ## Step 2: Configure the Workflow
@@ -248,12 +242,11 @@ sudo apt-get install ffmpeg  # Ubuntu/Debian
 
 ### "mlx_whisper: command not found"
 
-Install mlx-whisper:
+Install mlx-whisper using uv:
 
 ```bash
-pip install mlx-whisper
-# or
 uv add mlx-whisper
+uv sync
 ```
 
 ### Model download is slow

@@ -91,6 +91,18 @@ This is a video logging and analysis application that uses machine learning (MLX
 - Use Pydantic models for data validation and API schemas
 - Use async/await for FastAPI endpoints when doing I/O operations
 
+### Dependency Management Philosophy
+- **All Python dependencies are managed via UV** and declared in `pyproject.toml`
+- **Assume all declared dependencies are available** - do not write defensive try/except ImportError blocks
+- When adding a new library dependency:
+  1. First update `pyproject.toml` with `uv add <package>`
+  2. Then write code that imports and uses the library directly
+  3. Run `uv sync` to install and lock dependencies
+- **DO NOT** write fallback code like `try: import X except ImportError: use subprocess` 
+- **DO NOT** check if a library is installed before importing it
+- If a library is needed, add it to `pyproject.toml` as the first step, then use it confidently
+- The UV environment ensures all dependencies are available when code runs
+
 ### Snakemake Code
 - Use meaningful rule names that describe the operation (e.g., `transcribe`, `clean_subtitles`)
 - Define clear input/output dependencies
@@ -144,34 +156,45 @@ This is a video logging and analysis application that uses machine learning (MLX
 
 ## Dependencies & Libraries
 
-### Required Libraries
-- Use `mlx-vlm` for video analysis tasks
-- Use `cv2` (OpenCV) for video processing
-- Use `flask` for web server functionality (legacy results viewer)
-- Use `fastapi` and `uvicorn` for modern async API services (describe daemon)
-- Use `sqlite3` (built-in) for database operations
-- Use `base64` for encoding thumbnails
-- Use `snakemake` for workflow orchestration
-- Use `pydantic` for data validation and type safety
-- Use `watchdog` for file system monitoring (auto-ingest)
-- Use `requests` for HTTP client operations
-- Use `pyyaml` for configuration file parsing
-- Use `protobuf` for schema definitions (describe.proto)
-- Use `jinja2` for prompt templating (in describe_lib.py)
-
 ### Package Management with UV
-- This project uses `uv` as the primary package manager
-- Add dependencies with `uv add <package>` (runtime) or `uv add --dev <package>` (development)
-- Dependencies are declared in `pyproject.toml` and locked in `uv.lock`
-- Always sync after adding dependencies: `uv sync`
-- Run commands in the managed environment: `uv run -- python script.py`
+- **This project uses UV exclusively** for Python package management
+- UV manages the virtual environment and all dependencies via `pyproject.toml` and `uv.lock`
+- **All dependencies are assumed to be available** - the UV environment ensures this
+- **Never write defensive import code** - if a library is needed, add it to pyproject.toml first
 
 ### Adding New Dependencies
+**Workflow for adding a new library:**
+1. Add the dependency: `uv add <package>` (or `uv add --dev <package>` for dev-only)
+2. Sync the environment: `uv sync` (this updates `uv.lock`)
+3. Write code that imports and uses the library directly (no try/except ImportError)
+4. Commit both `pyproject.toml` and `uv.lock` changes
+
+**Guidelines:**
 - Only add new dependencies if absolutely necessary
-- Use `uv add <package>` to add to pyproject.toml
-- Document why the dependency is needed
+- Document why the dependency is needed in commit messages
 - Check for security vulnerabilities before adding
-- Run `uv sync` to update the lock file
+- Prefer well-maintained packages with good documentation
+
+### Running Python Code
+- Always use UV to run Python: `uv run -- python script.py`
+- Or activate the UV environment first, then run normally
+- UV ensures the correct Python version and all dependencies are available
+
+### Required Libraries
+Core dependencies used throughout the project:
+- `mlx-vlm` - Video analysis with vision language models
+- `mlx-whisper` - Audio transcription for subtitle generation  
+- `opencv-python` (`cv2`) - Video processing and thumbnail extraction
+- `flask` - Web server for legacy results viewer
+- `fastapi` and `uvicorn` - Modern async API services (describe daemon)
+- `sqlite3` (built-in) - Database operations
+- `snakemake` - Workflow orchestration
+- `pydantic` - Data validation and settings management
+- `watchdog` - File system monitoring (auto-ingest)
+- `requests` - HTTP client operations
+- `pyyaml` - Configuration file parsing
+- `protobuf` - Schema definitions (describe.proto)
+- `jinja2` - Prompt templating
 
 ## Project-Specific Guidelines
 

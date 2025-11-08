@@ -27,14 +27,7 @@ import json
 from pathlib import Path
 from mlx_whisper import transcribe
 from mlx_whisper.cli import get_writer
-
-# Import VAD utilities
-try:
-    from vad_utils import get_speech_segments, load_vad_model
-    VAD_AVAILABLE = True
-except ImportError:
-    VAD_AVAILABLE = False
-    logging.warning("VAD utilities not available - will transcribe full audio")
+from vad_utils import get_speech_segments, load_vad_model
 
 sm = snakemake # type: ignore
 
