@@ -408,11 +408,10 @@ Approximate times per video (varies by length and hardware):
 | Configuration | Limited | Full Snakemake config |
 | UI Feedback | Status text only | Progress bars + percentages |
 
-**Recommendation**: Use Snakemake Auto-Ingest for new workflows. Legacy auto-ingest is preserved for backward compatibility.
+**Recommendation**: Use Snakemake Auto-Ingest for all workflows - it provides the complete pipeline with real-time progress tracking.
 
 ## See Also
 
-- [Auto-Ingest Documentation](AUTO_INGEST.md) - Legacy auto-ingest feature
 - [Snakemake Workflow](SNAKEMAKE_WORKFLOW.md) - Detailed pipeline documentation
 - [Status Logger Plugin](STATUS_LOGGER.md) - Logger plugin details
 - [Main README](../README.md) - General project documentation

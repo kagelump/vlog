@@ -294,5 +294,5 @@ Potential improvements for the logger plugin:
 
 - [Snakemake Logger Plugin Interface](https://github.com/snakemake/snakemake-interface-logger-plugins)
 - [Snakemake Documentation](https://snakemake.readthedocs.io/)
-- [Auto-Ingest Documentation](AUTO_INGEST.md)
+- [Auto-Ingest Documentation](AUTO_INGEST_SNAKEMAKE.md)
 - [Snakemake Workflow Documentation](SNAKEMAKE_WORKFLOW.md)
