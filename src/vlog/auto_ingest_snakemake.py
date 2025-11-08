@@ -101,8 +101,7 @@ class AutoIngestSnakemakeService:
         # Snakemake process management
         self._snakemake_process: Optional[subprocess.Popen] = None
         self._snakemake_lock = threading.Lock()
-        self._queued_files = []
-        self._queue_lock = threading.Lock()
+        self._trigger_processing = threading.Event()
         
         logger.info(f"AutoIngestSnakemakeService initialized")
         logger.info(f"  Watch directory: {self.watch_directory}")
@@ -127,7 +126,7 @@ class AutoIngestSnakemakeService:
         
         try:
             # Create file handler with callback
-            event_handler = VideoFileHandler(callback=self._queue_video_file)
+            event_handler = VideoFileHandler(callback=self._trigger_snakemake)
             
             # Create and start observer
             self.observer = Observer()
@@ -136,9 +135,7 @@ class AutoIngestSnakemakeService:
             
             self.is_running = True
             logger.info(f"Auto-ingest service started, monitoring: {self.watch_directory}")
-            
-            # Process any existing unprocessed files
-            self._process_existing_files()
+            logger.info("Note: Existing files will be discovered and processed by Snakemake")
             
             return True
         except Exception as e:
@@ -147,7 +144,7 @@ class AutoIngestSnakemakeService:
     
     def stop(self) -> bool:
         """
-        Stop monitoring the directory.
+        Stop monitoring the directory and kill any running Snakemake processes.
         
         Returns:
             True if stopped successfully, False otherwise.
@@ -162,17 +159,24 @@ class AutoIngestSnakemakeService:
                 self.observer.stop()
                 self.observer.join(timeout=5)
             
-            # Stop any running Snakemake process
+            # Stop any running Snakemake process tree
             with self._snakemake_lock:
                 if self._snakemake_process:
-                    logger.info("Stopping Snakemake process...")
-                    self._snakemake_process.terminate()
+                    logger.info("Stopping Snakemake process tree...")
                     try:
-                        self._snakemake_process.wait(timeout=30)
-                    except subprocess.TimeoutExpired:
-                        logger.warning("Snakemake did not stop gracefully, killing...")
-                        self._snakemake_process.kill()
-                    self._snakemake_process = None
+                        # Kill the entire process group
+                        import signal
+                        pgid = os.getpgid(self._snakemake_process.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                        try:
+                            self._snakemake_process.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            logger.warning("Snakemake did not stop gracefully, killing...")
+                            os.killpg(pgid, signal.SIGKILL)
+                    except (ProcessLookupError, OSError) as e:
+                        logger.debug(f"Process cleanup error (may already be stopped): {e}")
+                    finally:
+                        self._snakemake_process = None
             
             self.is_running = False
             logger.info("Auto-ingest service stopped")
@@ -188,9 +192,6 @@ class AutoIngestSnakemakeService:
         Returns:
             Dictionary with status information.
         """
-        with self._queue_lock:
-            queued_count = len(self._queued_files)
-        
         with self._snakemake_lock:
             is_processing = self._snakemake_process is not None and self._snakemake_process.poll() is None
         
@@ -201,7 +202,6 @@ class AutoIngestSnakemakeService:
             'model_name': self.model_name,
             'cores': self.cores,
             'resources_mem_gb': self.resources_mem_gb,
-            'queued_files': queued_count,
             'is_processing': is_processing,
             'logger_port': self.logger_port
         }
@@ -228,87 +228,36 @@ class AutoIngestSnakemakeService:
                 'available': False
             }
     
-    def _process_existing_files(self) -> None:
-        """Process any existing video files in the watch directory."""
-        logger.info("Scanning for existing unprocessed video files...")
-        
-        try:
-            watch_dir_obj = Path(self.watch_directory).resolve()
-            
-            for filename in os.listdir(self.watch_directory):
-                # Validate filename
-                if os.path.sep in filename or filename.startswith('.'):
-                    continue
-                
-                file_path = os.path.join(self.watch_directory, filename)
-                file_path_obj = Path(file_path).resolve()
-                
-                # Ensure file is within watch directory
-                try:
-                    file_path_obj.relative_to(watch_dir_obj)
-                except ValueError:
-                    logger.warning(f"Skipping file outside watch directory: {filename}")
-                    continue
-                
-                if not os.path.isfile(file_path):
-                    continue
-                
-                if Path(file_path).suffix not in VIDEO_EXTENSIONS:
-                    continue
-                
-                # Queue the file
-                logger.info(f"Found unprocessed file: {filename}")
-                self._queue_video_file(file_path)
-        except Exception as e:
-            logger.error(f"Error scanning existing files: {e}")
-    
-    def _queue_video_file(self, file_path: str) -> None:
+    def _trigger_snakemake(self, file_path: str) -> None:
         """
-        Add a video file to the processing queue.
+        Trigger Snakemake processing when a new video file is detected.
         
         Args:
-            file_path: Path to the video file.
+            file_path: Path to the video file (for logging only).
         """
         filename = os.path.basename(file_path)
-        logger.info(f"Queuing video file: {filename}")
-        
-        with self._queue_lock:
-            if file_path not in self._queued_files:
-                self._queued_files.append(file_path)
-                logger.info(f"File queued. Queue size: {len(self._queued_files)}")
+        logger.info(f"New video file detected: {filename}")
+        logger.info("Triggering Snakemake workflow (Snakemake will discover all files to process)")
         
         # Start processing if not already running
         self._maybe_start_processing()
     
     def _maybe_start_processing(self) -> None:
-        """Start Snakemake processing if not already running and files are queued."""
+        """Start Snakemake processing if not already running."""
         with self._snakemake_lock:
             # Check if already processing
             if self._snakemake_process and self._snakemake_process.poll() is None:
-                logger.debug("Snakemake is already running")
+                logger.debug("Snakemake is already running, skipping trigger")
                 return
-            
-            # Check if there are files to process
-            with self._queue_lock:
-                if not self._queued_files:
-                    logger.debug("No files queued for processing")
-                    return
         
         # Start processing in a background thread
         thread = threading.Thread(target=self._run_snakemake_workflow, daemon=False)
         thread.start()
     
     def _run_snakemake_workflow(self) -> None:
-        """Run the Snakemake workflow for queued files."""
+        """Run the Snakemake workflow (Snakemake discovers files to process)."""
         try:
-            # Get files to process
-            with self._queue_lock:
-                if not self._queued_files:
-                    return
-                files_to_process = self._queued_files.copy()
-                self._queued_files.clear()
-            
-            logger.info(f"Starting Snakemake workflow for {len(files_to_process)} files")
+            logger.info("Starting Snakemake workflow")
             
             # Create temporary config file
             config = self._create_snakemake_config()
@@ -334,7 +283,7 @@ class AutoIngestSnakemakeService:
                 
                 logger.info(f"Running Snakemake command: {' '.join(cmd)}")
                 
-                # Run Snakemake
+                # Run Snakemake with process group for proper cleanup
                 with self._snakemake_lock:
                     self._snakemake_process = subprocess.Popen(
                         cmd,
@@ -342,7 +291,8 @@ class AutoIngestSnakemakeService:
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
                         text=True,
-                        bufsize=1
+                        bufsize=1,
+                        preexec_fn=os.setpgrp  # Create new process group
                     )
                     
                     # Stream output
@@ -366,9 +316,6 @@ class AutoIngestSnakemakeService:
                     os.unlink(temp_config)
                 except OSError as e:
                     logger.warning(f"Failed to cleanup temp config: {e}")
-            
-            # Check if more files were queued during processing
-            self._maybe_start_processing()
             
         except Exception as e:
             logger.error(f"Error running Snakemake workflow: {e}", exc_info=True)
