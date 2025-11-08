@@ -1,16 +1,24 @@
+#!/usr/bin/env python3
+"""
+Clean subtitle files generated from Whisper JSON output.
+
+This script reads Whisper JSON output (_whisper.json) which contains
+word-level timestamps and confidence scores, applies cleaning logic to
+remove duplicates and hallucinations, and outputs a clean SRT file (_cleaned.srt).
+
+The JSON format provides richer metadata than SRT for better hallucination detection.
+
+Author: automated migration with JSON support
+"""
 import os
 import re
-import mlx.core as mx
-from mlx_lm import load, generate
-from snakemake.script import snakemake
+import json
+from collections import Counter
+from typing import List, Dict
 
 
 TARGET_DIRECTORY = "." 
 OUTPUT_SUFFIX = "_cleaned.srt"
-
-import re
-from collections import Counter
-from typing import List
 
 
 def _get_ngrams(sequence: List[str], n: int) -> List[str]:
@@ -29,6 +37,7 @@ def _get_ngrams(sequence: List[str], n: int) -> List[str]:
         ngram = separator.join(sequence[i:i + n])
         ngrams.append(ngram)
     return ngrams
+
 
 def is_hallucination_by_repetition(
     text: str, 
@@ -99,39 +108,67 @@ def is_hallucination_by_repetition(
     else:
         return False
 
-def parse_srt(filepath):
+
+def parse_whisper_json(filepath: str) -> List[Dict]:
     """
-    Reads an SRT file, separates it into subtitle blocks, and returns the segments 
-    list (for index/time preservation) and a single string of all subtitle text 
-    content joined by a delimiter (for full context LLM processing).
+    Reads a Whisper JSON file and converts segments to subtitle format.
+    
+    Args:
+        filepath: Path to the _whisper.json file
+        
+    Returns:
+        List of subtitle dictionaries with 'start', 'end', and 'text' keys
     """
     print(f"Reading {filepath}...")
     with open(filepath, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    # Regex to find each block: index, timestamps, and text.
-    srt_blocks = re.findall(
-        r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n\d+|$)',
-        content,
-        re.DOTALL
-    )
-
+        data = json.load(f)
+    
     subtitles = []
-    for index, time, text in srt_blocks:
-        text_only = text.strip()
+    for segment in data.get('segments', []):
+        text = segment.get('text', '').strip()
+        start = segment.get('start', 0.0)
+        end = segment.get('end', 0.0)
+        
+        # Store segment with timing info
+        # We'll also keep word-level data for potential future use
         subtitles.append({
-            # NOTE: We store the original index, but it will be overwritten during reassembly
-            'index': int(index),
-            'time': time.strip(),
-            'text': text_only
+            'start': start,
+            'end': end,
+            'text': text,
+            'words': segment.get('words', [])  # Word-level timestamps for future enhancements
         })
-
+    
     return subtitles
 
-def reassemble_srt(subtitles):
+
+def format_srt_timestamp(seconds: float) -> str:
+    """
+    Convert seconds to SRT timestamp format (HH:MM:SS,mmm).
+    
+    Args:
+        seconds: Time in seconds
+        
+    Returns:
+        Formatted timestamp string
+    """
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    milliseconds = round((seconds % 1) * 1000)  # Round instead of truncate
+    
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{milliseconds:03d}"
+
+
+def reassemble_srt(subtitles: List[Dict]) -> str:
     """
     Takes the list of subtitle dictionaries and formats it back into a valid SRT string.
     Crucially, it re-indexes the output sequentially and skips segments with empty text.
+    
+    Args:
+        subtitles: List of subtitle dicts with 'start', 'end', and 'text' keys
+        
+    Returns:
+        SRT formatted string
     """
     output = []
     new_index = 1
@@ -140,7 +177,12 @@ def reassemble_srt(subtitles):
         if sub['text']:
             # Use the new sequential index for the final output
             output.append(f"{new_index}")
-            output.append(sub['time'])
+            
+            # Format timestamps
+            start_ts = format_srt_timestamp(sub['start'])
+            end_ts = format_srt_timestamp(sub['end'])
+            output.append(f"{start_ts} --> {end_ts}")
+            
             output.append(sub['text'])
             output.append("") # Empty line separator
             new_index += 1
@@ -148,41 +190,60 @@ def reassemble_srt(subtitles):
     # Join all parts with newlines, ensuring no trailing newline at the very end
     return "\n".join(output).strip()
 
-def clean_subtitles(subtitles):
-    """Cleans subtitle file text using the LLM in a single full-context pass."""
-    pass1 = []
-    removed = set()
-    for sub in subtitles:
-        last_sub_text = pass1[-1]['text'] if pass1 else ""
-        if (sub['text'].strip() == last_sub_text.strip() 
-            or is_hallucination_by_repetition(sub['text'])):
-            # Skip duplicate subtitle text
-            print(f"Skipping duplicate subtitle text: {sub['time']} {sub['text']}")
-            removed.add(sub['text'])
-            continue
-        print(f"OK subtitle text: {sub['time']} {sub['text']}")
-        pass1.append(sub)
+
+def clean_subtitles(subtitles: List[Dict]) -> List[Dict]:
+    """
+    Cleans subtitle segments by removing duplicates and hallucinations.
     
+    Args:
+        subtitles: List of subtitle dicts
+        
+    Returns:
+        Cleaned list of subtitle dicts
+    """
     result = []
-    for sub in pass1:
-        if sub['text'] in removed:
-            print(f"Removing subtitle text found in removed set: {sub['time']} {sub['text']}")
-            continue
-        result.append(sub)
+    seen_texts = set()
     
-    if (len(result) == 1):
+    for sub in subtitles:
+        text = sub['text'].strip()
+        
+        # Skip if hallucination
+        if is_hallucination_by_repetition(text):
+            print(f"Skipping hallucination: {sub['start']:.2f}s {text}")
+            continue
+        
+        # Skip if duplicate of previous subtitle
+        if text in seen_texts:
+            print(f"Skipping duplicate: {sub['start']:.2f}s {text}")
+            continue
+        
+        # Keep this subtitle
+        print(f"OK subtitle text: {sub['start']:.2f}s {text}")
+        result.append(sub)
+        seen_texts.add(text)
+    
+    # If only one subtitle remains, return empty (likely all hallucination)
+    if len(result) == 1:
         return []
     return result
 
 
-def process_srt_file(infile, outfile):    
+def process_json_to_srt(json_file: str, srt_file: str):    
     """
-    Process a single SRT file: parse, clean, and reassemble.
+    Process a Whisper JSON file: parse, clean, and output as SRT.
+    
+    Args:
+        json_file: Input _whisper.json file path
+        srt_file: Output _cleaned.srt file path
     """
-    subtitles = parse_srt(infile)
-    output = clean_subtitles(subtitles)
-    with open(outfile, 'w', encoding='utf-8') as f:
-        f.write(reassemble_srt(output))
+    subtitles = parse_whisper_json(json_file)
+    cleaned = clean_subtitles(subtitles)
+    with open(srt_file, 'w', encoding='utf-8') as f:
+        f.write(reassemble_srt(cleaned))
 
 
-process_srt_file(snakemake.input.srt, snakemake.output.cleaned)
+# Main entry point for Snakemake
+if __name__ == "__main__":
+    # Only import snakemake when running as a script
+    from snakemake.script import snakemake
+    process_json_to_srt(snakemake.input.json, snakemake.output.cleaned)

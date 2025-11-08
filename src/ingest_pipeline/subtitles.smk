@@ -68,24 +68,25 @@ rule subtitles_all:
         expand(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt", stem=VIDEO_STEMS)
 
 
-# Rule: Transcribe preview file to generate subtitles
+# Rule: Transcribe preview file to generate JSON with word timestamps
 rule transcribe:
     threads: 2
     input:
         f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}"
     output:
-        f"{PREVIEW_FOLDER}/{{stem}}.srt"
+        f"{PREVIEW_FOLDER}/{{stem}}_whisper.json"
     params:
         model=TRANSCRIBE_MODEL,
-        preview_folder=PREVIEW_FOLDER
+        preview_folder=PREVIEW_FOLDER,
+        use_vad=True  # Enable VAD by default for better accuracy
     script:
         "scripts/transcribe.py"
 
 
-# Rule: Clean subtitle file
+# Rule: Clean subtitle file (convert JSON to clean SRT)
 rule clean_subtitles:
     input:
-        srt=f"{PREVIEW_FOLDER}/{{stem}}.srt"
+        json=f"{PREVIEW_FOLDER}/{{stem}}_whisper.json"
     output:
         cleaned=f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt"
     # Use Snakemake's script directive to run the cleaner as a separate script.
