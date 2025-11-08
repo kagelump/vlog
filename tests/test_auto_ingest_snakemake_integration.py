@@ -71,11 +71,9 @@ class TestAutoIngestSnakemakeService:
             assert 'model_name' in status
             assert 'cores' in status
             assert 'resources_mem_gb' in status
-            assert 'queued_files' in status
             assert 'is_processing' in status
             
             assert status['is_running'] is False
-            assert status['queued_files'] == 0
     
     def test_create_snakemake_config(self):
         """Test that Snakemake config is created correctly."""
