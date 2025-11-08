@@ -95,7 +95,7 @@ rule start_daemon:
         mkdir -p $(dirname "{params.log_file}") $(dirname "{params.pid_file}") $(dirname "{output}")
 
         # Run the daemon start script
-        bash src/ingest_pipeline/scripts/start_daemon.sh \
+        bash src/vlog/workflows/scripts/start_daemon.sh \
             "{params.model}" \
             "{params.host}" \
             "{params.port}" \
@@ -120,7 +120,7 @@ rule stop_daemon:
         "Stopping describe daemon"
     shell:
         """
-        bash src/ingest_pipeline/scripts/stop_daemon.sh \
+        bash src/vlog/workflows/scripts/stop_daemon.sh \
             "{input.pid}" \
             "{input.signal}" \
             "{params.host}" \

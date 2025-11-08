@@ -71,7 +71,7 @@ rule describe:
         "Describing video: {wildcards.stem}"
     shell:
         """
-        uv run -- python src/ingest_pipeline/scripts/describe_to_json.py \
+        uv run -- python src/vlog/workflows/scripts/describe_to_json.py \
             "{input.video}" \
             "{input.subtitle}" \
             "{output}" \
