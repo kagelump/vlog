@@ -32,6 +32,7 @@ os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = "/opt/homebrew/lib"
 
 from mlx_whisper import transcribe
 from vad_utils import get_speech_segments, load_vad_model
+from opencc import OpenCC
 
 
 def merge_transcription_segments(
@@ -53,6 +54,10 @@ def merge_transcription_segments(
         "segments": [],
     }
     languages = set()
+    
+    # Check if any transcription contains Chinese - if so, initialize OpenCC for s2tw conversion
+    has_chinese = any(trans_result.get('language') == 'zh' for trans_result in transcription_results)
+    cc = OpenCC('s2tw') if has_chinese else None
     
     for vad_seg, trans_result in zip(vad_segments, transcription_results):
         offset = vad_seg['start']
@@ -77,6 +82,10 @@ def merge_transcription_segments(
             adjusted_segment['start'] += offset
             adjusted_segment['end'] += offset
             
+            # Convert Chinese text if OpenCC is initialized
+            if cc and 'text' in adjusted_segment:
+                adjusted_segment['text'] = cc.convert(adjusted_segment['text'])
+            
             # Adjust word timestamps if present
             if 'words' in adjusted_segment:
                 adjusted_words = []
@@ -84,6 +93,9 @@ def merge_transcription_segments(
                     adjusted_word = word.copy()
                     adjusted_word['start'] += offset
                     adjusted_word['end'] += offset
+                    # Convert Chinese word text if OpenCC is initialized
+                    if cc and 'word' in adjusted_word:
+                        adjusted_word['word'] = cc.convert(adjusted_word['word'])
                     adjusted_words.append(adjusted_word)
                 adjusted_segment['words'] = adjusted_words
             
@@ -93,7 +105,11 @@ def merge_transcription_segments(
             # Add text with space separator
             if merged["text"]:
                 merged["text"] += " "
-            merged["text"] += trans_result.get("text", "")
+            text_to_add = trans_result.get("text", "")
+            # Convert Chinese text if OpenCC is initialized
+            if cc:
+                text_to_add = cc.convert(text_to_add)
+            merged["text"] += text_to_add
             languages.add(trans_result.get("language", 'en'))
         
     merged["language"] = list(languages)
