@@ -94,7 +94,7 @@ def merge_transcription_segments(
             if merged["text"]:
                 merged["text"] += " "
             merged["text"] += trans_result.get("text", "")
-            languages.update(trans_result.get("language", 'en'))
+            languages.add(trans_result.get("language", 'en'))
         
     merged["language"] = list(languages)
     
