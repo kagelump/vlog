@@ -272,11 +272,12 @@ snakemake --snakefile src/ingest_pipeline/Snakefile --cores 1 --configfile confi
 The auto-ingest feature monitors a directory for new video files and automatically processes them through the Snakemake pipeline.
 
 **Key Components:**
-- `src/vlog/auto_ingest.py` - Main auto-ingest service using watchdog
+- `src/vlog/auto_ingest_snakemake.py` - Main auto-ingest service using watchdog
 - File system monitoring with `watchdog.observers.Observer`
 - Idempotent processing (checks database before processing)
 - Integration with Snakemake workflow for each new file
 - REST API endpoints for control (start/stop/status)
+- Real-time progress tracking via Snakemake logger plugin
 
 **Key Guidelines:**
 - Always check if file exists in database before processing (`check_if_file_exists()`)
@@ -284,6 +285,7 @@ The auto-ingest feature monitors a directory for new video files and automatical
 - Provide status endpoints for monitoring
 - Handle errors gracefully and log them
 - Support starting/stopping via API or web UI
+- Track progress via the Snakemake logger plugin API
 
 ### DaVinci Resolve Integration
 The project includes integration with DaVinci Resolve for importing classified video clips.
@@ -392,7 +394,7 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - `src/vlog/describe_daemon.py`: FastAPI service for video description
 - `src/vlog/describe_client.py`: Client for communicating with describe daemon
 - `src/vlog/web.py`: Flask application and API endpoints (legacy results viewer)
-- `src/vlog/auto_ingest.py`: Automated video monitoring and ingestion
+- `src/vlog/auto_ingest_snakemake.py`: Automated video monitoring and ingestion with Snakemake
 - `src/vlog/srt_cleaner.py`: Subtitle file cleaning and processing
 - `src/vlog/davinci_clip_importer.py`: DaVinci Resolve integration script
 - `src/proto/describe.proto`: Protocol Buffers schema definition
@@ -415,7 +417,17 @@ The launcher UI provides a web-based interface for running scripts and managing 
 - `static/index.html`: Frontend UI for results viewer
 - `static/launcher/launcher.html`: Frontend UI for launcher
 - `prompts/`: Model prompts in YAML and Markdown formats
-- `docs/`: Detailed documentation (AUTO_INGEST.md, SNAKEMAKE_WORKFLOW.md, STAGED_WORKFLOW.md, etc.)
+- `docs/`: Detailed documentation
+  - `AUTO_INGEST_SNAKEMAKE.md`: Auto-ingest with Snakemake pipeline
+  - `DAEMON_MANAGEMENT.md`: Daemon management in Snakemake workflow
+  - `DAVINCI_INTEGRATION.md`: DaVinci Resolve integration guide
+  - `EXAMPLE_WORKFLOW.md`: Complete example workflow from SD card
+  - `SNAKEMAKE_QUICKSTART.md`: Quick start guide for Snakemake ingestion
+  - `SNAKEMAKE_WORKFLOW.md`: Detailed Snakemake workflow documentation
+  - `STAGED_WORKFLOW.md`: Staged workflow guide
+  - `STATUS_LOGGER.md`: Status logger plugin documentation
+  - `STATUS_LOGGER_QUICKREF.md`: Status logger quick reference
+  - `VAD_TRANSCRIPTION.md`: Voice activity detection transcription
 - `tests/`: Test suite (pytest-based)
 
 ## Common Patterns
