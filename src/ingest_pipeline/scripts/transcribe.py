@@ -103,27 +103,23 @@ def run_transcribe(
     logging.info("Transcribing %s with model %s (VAD: %s)", input_path, model, use_vad)
     
     try:
-        # Load VAD model if enabled and available
+        # Load VAD model if enabled
         vad_model = None
         vad_utils = None
         speech_segments = []
         
-        if use_vad and VAD_AVAILABLE:
-            try:
-                logging.info("Loading Silero VAD model...")
-                vad_model, vad_utils = load_vad_model()
-                
-                # Detect speech segments
-                logging.info("Detecting speech segments...")
-                speech_segments = get_speech_segments(
-                    input_path,
-                    vad_model=vad_model,
-                    vad_utils=vad_utils
-                )
-                logging.info(f"Detected {len(speech_segments)} speech segments")
-            except Exception as e:
-                logging.warning(f"VAD failed, will transcribe full audio: {e}")
-                speech_segments = []
+        if use_vad:
+            logging.info("Loading Silero VAD model...")
+            vad_model, vad_utils = load_vad_model()
+            
+            # Detect speech segments
+            logging.info("Detecting speech segments...")
+            speech_segments = get_speech_segments(
+                input_path,
+                vad_model=vad_model,
+                vad_utils=vad_utils
+            )
+            logging.info(f"Detected {len(speech_segments)} speech segments")
         
         # Transcribe based on VAD results
         if speech_segments:

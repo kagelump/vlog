@@ -3080,18 +3080,6 @@ wheels = [
 ]
 
 [[package]]
-name = "vad"
-version = "1.0.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/32/8d/b9aa2bddfcac4a455ea1543124b2545b197dde2f6749b3182045f0a4d4b9/vad-1.0.2.tar.gz", hash = "sha256:45f94be198842febf678bd9dbd5bf425d9e8ab59f8f1eb21e8d6e92e469bdce6", size = 3783, upload-time = "2023-03-23T14:32:23.634Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/eb/44f99d15727e51ecfbdcbf69b8ef74de08dc5db93a7a430b0f9eeda08c6a/vad-1.0.2-py3-none-any.whl", hash = "sha256:80f59cd32c446e592e1b21373eb604304aee42b2e44bfef2b75a9b2d84a1f7a8", size = 4131, upload-time = "2023-03-23T14:32:20.979Z" },
-]
-
-[[package]]
 name = "vlog"
 version = "0.1.0"
 source = { editable = "." }
@@ -3112,7 +3100,6 @@ dependencies = [
     { name = "torchaudio" },
     { name = "torchvision" },
     { name = "uvicorn" },
-    { name = "vad" },
     { name = "watchdog" },
 ]
 
@@ -3148,7 +3135,6 @@ requires-dist = [
     { name = "torchaudio", specifier = ">=2.9.0" },
     { name = "torchvision", specifier = ">=0.24.0" },
     { name = "uvicorn", specifier = ">=0.23.0" },
-    { name = "vad", specifier = ">=1.0.2" },
     { name = "watchdog", specifier = ">=3.0.0" },
 ]
 provides-extras = ["dev"]

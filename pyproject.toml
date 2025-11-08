@@ -22,7 +22,6 @@ dependencies = [
     "pyyaml>=6.0",
     "pytest>=8.4.2",
     "torchaudio>=2.9.0",
-    "vad>=1.0.2",
 ]
 
 [project.optional-dependencies]
