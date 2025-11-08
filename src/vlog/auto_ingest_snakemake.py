@@ -104,6 +104,9 @@ class AutoIngestSnakemakeService:
         self._queued_files = []
         self._queue_lock = threading.Lock()
         
+        # Thread for scanning existing files
+        self._scan_thread: Optional[threading.Thread] = None
+        
         logger.info(f"AutoIngestSnakemakeService initialized")
         logger.info(f"  Watch directory: {self.watch_directory}")
         logger.info(f"  Preview folder: {self.preview_folder}")
@@ -137,8 +140,10 @@ class AutoIngestSnakemakeService:
             self.is_running = True
             logger.info(f"Auto-ingest service started, monitoring: {self.watch_directory}")
             
-            # Process any existing unprocessed files
-            self._process_existing_files()
+            # Process any existing unprocessed files in a background thread
+            # to avoid blocking the HTTP response
+            self._scan_thread = threading.Thread(target=self._process_existing_files, daemon=False)
+            self._scan_thread.start()
             
             return True
         except Exception as e:
@@ -157,10 +162,20 @@ class AutoIngestSnakemakeService:
             return False
         
         try:
+            # Set flag to stop background operations
+            self.is_running = False
+            
             # Stop the observer
             if self.observer:
                 self.observer.stop()
                 self.observer.join(timeout=5)
+            
+            # Wait for scanning thread to finish
+            if self._scan_thread and self._scan_thread.is_alive():
+                logger.info("Waiting for file scanning to complete...")
+                self._scan_thread.join(timeout=10)
+                if self._scan_thread.is_alive():
+                    logger.warning("File scanning thread did not finish in time")
             
             # Stop any running Snakemake process
             with self._snakemake_lock:
@@ -174,7 +189,6 @@ class AutoIngestSnakemakeService:
                         self._snakemake_process.kill()
                     self._snakemake_process = None
             
-            self.is_running = False
             logger.info("Auto-ingest service stopped")
             return True
         except Exception as e:
@@ -236,6 +250,11 @@ class AutoIngestSnakemakeService:
             watch_dir_obj = Path(self.watch_directory).resolve()
             
             for filename in os.listdir(self.watch_directory):
+                # Check if service has been stopped
+                if not self.is_running:
+                    logger.info("Scanning interrupted: service stopped")
+                    return
+                
                 # Validate filename
                 if os.path.sep in filename or filename.startswith('.'):
                     continue
@@ -259,6 +278,8 @@ class AutoIngestSnakemakeService:
                 # Queue the file
                 logger.info(f"Found unprocessed file: {filename}")
                 self._queue_video_file(file_path)
+            
+            logger.info("Finished scanning for existing files")
         except Exception as e:
             logger.error(f"Error scanning existing files: {e}")
     

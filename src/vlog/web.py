@@ -136,6 +136,8 @@ def get_thumbnail_file(filename):
 @app.route('/api/set-working-dir', methods=['POST'])
 def set_working_dir():
     """Set the working directory."""
+    global working_directory
+    
     # request.json can be None if the client sent no JSON body; use a safe default
     data = request.get_json() or {}
     working_dir = data.get('working_dir')
