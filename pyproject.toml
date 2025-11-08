@@ -21,6 +21,7 @@ dependencies = [
     "snakemake>=9.0.0",
     "pyyaml>=6.0",
     "pytest>=8.4.2",
+    "torchaudio>=2.9.0",
 ]
 
 [project.optional-dependencies]
