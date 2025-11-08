@@ -32,11 +32,21 @@ logger = logging.getLogger(__name__)
 # Default ML model for auto-ingest
 DEFAULT_AUTOINGEST_MODEL = 'mlx-community/Qwen3-VL-8B-Instruct-4bit'
 
-# Import auto-ingest service
+# Import auto-ingest services
 from vlog.auto_ingest import AutoIngestService
 
-# Global auto-ingest service instance
+# Try to import Snakemake-based auto-ingest (may fail if dependencies missing)
+try:
+    from vlog.auto_ingest_snakemake import AutoIngestSnakemakeService
+    SNAKEMAKE_AUTOINGEST_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Snakemake auto-ingest not available: {e}")
+    AutoIngestSnakemakeService = None
+    SNAKEMAKE_AUTOINGEST_AVAILABLE = False
+
+# Global auto-ingest service instances
 auto_ingest_service: Optional[AutoIngestService] = None
+auto_ingest_snakemake_service: Optional[AutoIngestSnakemakeService] = None
 
 working_directory = os.getcwd()
 
@@ -280,6 +290,162 @@ def stop_auto_ingest():
         return jsonify({
             'success': False,
             'message': 'Failed to stop auto-ingest service'
+        }), 500
+
+
+# --- Routes: Auto-Ingest Snakemake API ---
+
+@app.route('/api/auto-ingest-snakemake/status', methods=['GET'])
+def get_auto_ingest_snakemake_status():
+    """Get the status of the auto-ingest Snakemake service."""
+    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
+        return jsonify({
+            'available': False,
+            'is_running': False,
+            'watch_directory': None,
+            'preview_folder': None,
+            'model_name': None,
+            'error': 'Snakemake auto-ingest dependencies not installed'
+        })
+    
+    if auto_ingest_snakemake_service is None:
+        return jsonify({
+            'available': True,
+            'is_running': False,
+            'watch_directory': None,
+            'preview_folder': None,
+            'model_name': None
+        })
+    
+    status = auto_ingest_snakemake_service.get_status()
+    status['available'] = True
+    return jsonify(status)
+
+
+@app.route('/api/auto-ingest-snakemake/progress', methods=['GET'])
+def get_auto_ingest_snakemake_progress():
+    """Get the current progress from the Snakemake logger plugin."""
+    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
+        return jsonify({
+            'available': False,
+            'error': 'Snakemake auto-ingest not available'
+        }), 503
+    
+    if auto_ingest_snakemake_service is None:
+        return jsonify({
+            'available': False,
+            'error': 'Service not initialized'
+        }), 503
+    
+    progress = auto_ingest_snakemake_service.get_progress()
+    return jsonify(progress)
+
+
+@app.route('/api/auto-ingest-snakemake/start', methods=['POST'])
+def start_auto_ingest_snakemake():
+    """Start the auto-ingest Snakemake service."""
+    global auto_ingest_snakemake_service
+    
+    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'message': 'Snakemake auto-ingest is not available. Please install required dependencies (snakemake, watchdog, requests).'
+        }), 503
+    
+    data = request.json or {}
+    watch_dir = data.get('watch_directory') or working_directory
+    preview_folder = data.get('preview_folder')  # Optional, defaults to watch_dir
+    model_name = data.get('model_name', DEFAULT_AUTOINGEST_MODEL)
+    cores = data.get('cores', 8)
+    resources_mem_gb = data.get('resources_mem_gb', 12)
+    
+    # Validate and normalize directory paths
+    try:
+        watch_dir = os.path.abspath(watch_dir)
+        if preview_folder:
+            preview_folder = os.path.abspath(preview_folder)
+    except (TypeError, ValueError) as e:
+        return jsonify({
+            'success': False,
+            'message': f'Invalid directory path: {e}'
+        }), 400
+    
+    # Validate directories exist
+    if not os.path.isdir(watch_dir):
+        return jsonify({
+            'success': False,
+            'message': f'Watch directory does not exist: {watch_dir}'
+        }), 400
+    
+    if preview_folder and not os.path.isdir(preview_folder):
+        return jsonify({
+            'success': False,
+            'message': f'Preview folder does not exist: {preview_folder}'
+        }), 400
+    
+    # Validate numeric parameters
+    try:
+        cores = max(1, int(cores))
+        resources_mem_gb = max(1, int(resources_mem_gb))
+    except (TypeError, ValueError):
+        return jsonify({
+            'success': False,
+            'message': 'Invalid parameters: cores and resources_mem_gb must be integers'
+        }), 400
+    
+    # Check if service is already running
+    if auto_ingest_snakemake_service is not None and auto_ingest_snakemake_service.is_running:
+        return jsonify({
+            'success': False,
+            'message': 'Auto-ingest Snakemake service is already running'
+        }), 400
+    
+    # Create new service
+    auto_ingest_snakemake_service = AutoIngestSnakemakeService(
+        watch_dir,
+        preview_folder=preview_folder,
+        model_name=model_name,
+        cores=cores,
+        resources_mem_gb=resources_mem_gb
+    )
+    
+    success = auto_ingest_snakemake_service.start()
+    
+    if success:
+        preview_msg = f', preview={preview_folder}' if preview_folder else ''
+        return jsonify({
+            'success': True,
+            'message': f'Auto-ingest Snakemake started, monitoring: {watch_dir}{preview_msg} (cores={cores}, mem={resources_mem_gb}GB)'
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Failed to start auto-ingest Snakemake service'
+        }), 500
+
+
+@app.route('/api/auto-ingest-snakemake/stop', methods=['POST'])
+def stop_auto_ingest_snakemake():
+    """Stop the auto-ingest Snakemake service."""
+    global auto_ingest_snakemake_service
+    
+    if auto_ingest_snakemake_service is None or not auto_ingest_snakemake_service.is_running:
+        return jsonify({
+            'success': False,
+            'message': 'Auto-ingest Snakemake service is not running'
+        }), 400
+    
+    success = auto_ingest_snakemake_service.stop()
+    
+    if success:
+        return jsonify({
+            'success': True,
+            'message': 'Auto-ingest Snakemake service stopped'
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Failed to stop auto-ingest Snakemake service'
         }), 500
 
 # --- Server Start ---
