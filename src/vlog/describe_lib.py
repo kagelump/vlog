@@ -143,20 +143,7 @@ def describe_video(
         messages, tokenize=False, add_generation_prompt=True
     )
 
-    # Allow external monkeypatching by routing heavy helpers through the
-    # top-level `vlog.describe` module when available. This enables tests to
-    # patch `vlog.describe.process_vision_info`, `vlog.describe.generate`, and
-    # `vlog.describe.mx` for fast, isolated unit tests.
-    try:
-        import vlog.describe as _outer
-    except Exception:
-        _outer = None
-
-    # Process vision info (videos etc) — prefer patched implementation on
-    # `vlog.describe` when present, otherwise fall back to the local import.
-    proc_vis = (_outer.process_vision_info if _outer and hasattr(_outer, 'process_vision_info')
-                else process_vision_info)
-    _, video_inputs = cast(Tuple[Sequence[Any], Sequence[Any]], proc_vis(messages))
+    _, video_inputs = cast(Tuple[Sequence[Any], Sequence[Any]], process_vision_info(messages))
 
     inputs = processor(
         text=[text],
@@ -167,10 +154,9 @@ def describe_video(
         video_metadata={'fps': fps, 'total_num_frames': video_inputs[0].shape[0]}
     )
 
-    array_fn = (_outer.mx.array if _outer and hasattr(_outer, 'mx') else mx.array)
-    input_ids = array_fn(inputs["input_ids"])
-    mask = array_fn(inputs["attention_mask"])
-    video_grid_thw = array_fn(inputs["video_grid_thw"])
+    input_ids = mx.array(inputs["input_ids"])
+    mask = mx.array(inputs["attention_mask"])
+    video_grid_thw = mx.array(inputs["video_grid_thw"])
 
     # include kwargs for video layout grid info
     extra = {"video_grid_thw": video_grid_thw}
@@ -182,8 +168,7 @@ def describe_video(
         raise ValueError("Please provide a valid video or image input.")
     pixel_values = mx.array(pixel_values)
 
-    gen_fn = (_outer.generate if _outer and hasattr(_outer, 'generate') else generate)
-    response = gen_fn(
+    response = generate(
         model=model,
         processor=processor,
         prompt=text,

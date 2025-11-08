@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 from flask import Flask, jsonify, request, send_from_directory, g
 
-from vlog.launcher_utils import browse_server_directory
+from vlog.web_file_browser import browse_server_directory
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -32,20 +32,9 @@ logger = logging.getLogger(__name__)
 # Default ML model for auto-ingest
 DEFAULT_AUTOINGEST_MODEL = 'mlx-community/Qwen3-VL-8B-Instruct-4bit'
 
-# Import auto-ingest services
-from vlog.auto_ingest import AutoIngestService
-
-# Try to import Snakemake-based auto-ingest (may fail if dependencies missing)
-try:
-    from vlog.auto_ingest_snakemake import AutoIngestSnakemakeService
-    SNAKEMAKE_AUTOINGEST_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"Snakemake auto-ingest not available: {e}")
-    AutoIngestSnakemakeService = None
-    SNAKEMAKE_AUTOINGEST_AVAILABLE = False
+from vlog.auto_ingest_snakemake import AutoIngestSnakemakeService
 
 # Global auto-ingest service instances
-auto_ingest_service: Optional[AutoIngestService] = None
 auto_ingest_snakemake_service: Optional[AutoIngestSnakemakeService] = None
 
 working_directory = os.getcwd()
@@ -184,130 +173,11 @@ def get_project_info():
     })
 
 
-# --- Routes: Auto-Ingest API ---
-
-@app.route('/api/auto-ingest/status', methods=['GET'])
-def get_auto_ingest_status():
-    """Get the status of the auto-ingest service."""
-    if auto_ingest_service is None:
-        return jsonify({
-            'available': True,
-            'is_running': False,
-            'watch_directory': None,
-            'model_name': None
-        })
-    
-    status = auto_ingest_service.get_status()
-    status['available'] = True
-    return jsonify(status)
-
-
-@app.route('/api/auto-ingest/start', methods=['POST'])
-def start_auto_ingest():
-    """Start the auto-ingest service."""
-    global auto_ingest_service
-    
-    data = request.json or {}
-    watch_dir = data.get('watch_directory') or working_directory
-    model_name = data.get('model_name', DEFAULT_AUTOINGEST_MODEL)
-    batch_size = data.get('batch_size', 5)
-    batch_timeout = data.get('batch_timeout', 60.0)
-    
-    # Validate and normalize directory path
-    try:
-        watch_dir = os.path.abspath(watch_dir)
-    except (TypeError, ValueError) as e:
-        return jsonify({
-            'success': False,
-            'message': f'Invalid directory path: {e}'
-        }), 400
-    
-    # Validate directory exists
-    if not os.path.isdir(watch_dir):
-        return jsonify({
-            'success': False,
-            'message': f'Directory does not exist: {watch_dir}'
-        }), 400
-    
-    # Validate batch parameters
-    try:
-        batch_size = max(1, int(batch_size))
-        batch_timeout = max(1.0, float(batch_timeout))
-    except (TypeError, ValueError):
-        return jsonify({
-            'success': False,
-            'message': 'Invalid batch parameters: batch_size must be an integer and batch_timeout must be a number'
-        }), 400
-    
-    # Check if service is already running
-    if auto_ingest_service is not None and auto_ingest_service.is_running:
-        return jsonify({
-            'success': False,
-            'message': 'Auto-ingest is already running'
-        }), 400
-    
-    # Create new service (or recreate if parameters changed)
-    auto_ingest_service = AutoIngestService(
-        watch_dir, 
-        model_name,
-        batch_size=batch_size,
-        batch_timeout=batch_timeout
-    )
-    
-    success = auto_ingest_service.start()
-    
-    if success:
-        return jsonify({
-            'success': True,
-            'message': f'Auto-ingest started, monitoring: {watch_dir} (batch_size={batch_size}, timeout={batch_timeout}s)'
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'message': 'Failed to start auto-ingest service'
-        }), 500
-
-
-@app.route('/api/auto-ingest/stop', methods=['POST'])
-def stop_auto_ingest():
-    """Stop the auto-ingest service."""
-    global auto_ingest_service
-    
-    if auto_ingest_service is None or not auto_ingest_service.is_running:
-        return jsonify({
-            'success': False,
-            'message': 'Auto-ingest is not running'
-        }), 400
-    
-    success = auto_ingest_service.stop()
-    
-    if success:
-        return jsonify({
-            'success': True,
-            'message': 'Auto-ingest stopped'
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'message': 'Failed to stop auto-ingest service'
-        }), 500
-
-
 # --- Routes: Auto-Ingest Snakemake API ---
 
 @app.route('/api/auto-ingest-snakemake/status', methods=['GET'])
 def get_auto_ingest_snakemake_status():
     """Get the status of the auto-ingest Snakemake service."""
-    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
-        return jsonify({
-            'available': False,
-            'is_running': False,
-            'watch_directory': None,
-            'preview_folder': None,
-            'model_name': None,
-            'error': 'Snakemake auto-ingest dependencies not installed'
-        })
-    
     if auto_ingest_snakemake_service is None:
         return jsonify({
             'available': True,
@@ -325,12 +195,6 @@ def get_auto_ingest_snakemake_status():
 @app.route('/api/auto-ingest-snakemake/progress', methods=['GET'])
 def get_auto_ingest_snakemake_progress():
     """Get the current progress from the Snakemake logger plugin."""
-    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
-        return jsonify({
-            'available': False,
-            'error': 'Snakemake auto-ingest not available'
-        }), 503
-    
     if auto_ingest_snakemake_service is None:
         return jsonify({
             'available': False,
@@ -345,12 +209,6 @@ def get_auto_ingest_snakemake_progress():
 def start_auto_ingest_snakemake():
     """Start the auto-ingest Snakemake service."""
     global auto_ingest_snakemake_service
-    
-    if not SNAKEMAKE_AUTOINGEST_AVAILABLE:
-        return jsonify({
-            'success': False,
-            'message': 'Snakemake auto-ingest is not available. Please install required dependencies (snakemake, watchdog, requests).'
-        }), 503
     
     data = request.json or {}
     watch_dir = data.get('watch_directory') or working_directory
