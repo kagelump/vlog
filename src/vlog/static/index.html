@@ -6,225 +6,433 @@
     <title>Video Classification Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Custom scrollbar styling for the results container */
-        .results-container::-webkit-scrollbar {
+        /* Custom scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
             width: 8px;
+            height: 8px;
         }
-        .results-container::-webkit-scrollbar-thumb {
-            background-color: #6366f1; /* Indigo-500 */
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #6366f1;
             border-radius: 4px;
         }
-        .results-container::-webkit-scrollbar-track {
-            background: #f1f5f9; /* Slate-100 */
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
         }
-        .text-shadow {
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        
+        /* Thumbnail hover effect */
+        .thumbnail-hover {
+            transition: transform 0.2s, opacity 0.2s;
         }
-        /* Custom styling for the clickable thumbnail (video poster) */
-        .video-poster {
-            transition: transform 0.2s;
-        }
-        .video-poster:hover {
-            transform: scale(1.01);
+        .thumbnail-hover:hover {
+            transform: scale(1.05);
             opacity: 0.95;
         }
         
-        /* Ensure table rows respect the left border for scene coloring */
-        #results-table tbody tr {
-            transition: all 0.3s ease-in-out;
+        /* Row hover effect */
+        .table-row-hover {
+            transition: background-color 0.2s;
         }
-        #results-table tbody tr:hover {
-            filter: brightness(1.02);
-        }
-
-        /* Styling for the Keep/Discard toggle button */
-        .keep-toggle {
-            transition: background-color 0.2s, transform 0.1s;
-        }
-        .keep-toggle:active {
-            transform: scale(0.98);
+        .table-row-hover:hover {
+            background-color: rgba(99, 102, 241, 0.05);
         }
         
-        /* Styling for the quick set duration buttons */
-        .quick-set-btn {
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-            transition: background-color 0.1s, transform 0.1s;
+        /* Loading skeleton animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
-        .quick-set-btn:hover {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        .skeleton {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
-        .quick-set-btn:active {
-            transform: scale(0.98);
+        
+        /* Star rating */
+        .star-filled {
+            color: #fbbf24;
+        }
+        .star-empty {
+            color: #d1d5db;
+        }
+        
+        /* Sort indicator */
+        .sort-indicator {
+            display: inline-block;
+            width: 0;
+            height: 0;
+            margin-left: 0.25rem;
+            vertical-align: middle;
+        }
+        .sort-asc {
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 4px solid currentColor;
+        }
+        .sort-desc {
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 4px solid currentColor;
+        }
+        
+        /* Modal backdrop */
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
         }
     </style>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                }
-            }
-        }
-    </script>
 </head>
-<body class="bg-gray-50 min-h-screen font-sans">
+<body class="bg-gray-50 min-h-screen">
     
-    <!-- Changed from container mx-auto to w-full to maximize horizontal space -->
-    <div class="w-full p-4 sm:p-8">
-        <!-- Header -->
-        <header class="text-center mb-8">
-            <h1 class="text-4xl sm:text-5xl font-extrabold text-indigo-700 text-shadow mb-2">
-                Classification Results Monitor
-            </h1>
-            <p id="status-message" class="text-gray-600 text-lg transition-all duration-500">
-                <span class="font-semibold text-green-500">Live:</span> Fetching data every 60 seconds...
-            </p>
-        </header>
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold text-indigo-700">Video Classification Dashboard</h1>
+                    <p class="text-sm text-gray-600 mt-1">View-only interface for classified video clips</p>
+                </div>
+                <a href="/" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                    ← Back to Launcher
+                </a>
+            </div>
+        </div>
+    </header>
 
-        <!-- Results Table Container -->
-        <div class="bg-white shadow-2xl rounded-xl overflow-hidden ring-4 ring-indigo-200/50">
-            <div class="p-6 bg-indigo-50 border-b border-indigo-100 flex justify-between items-center">
-                <h2 class="text-2xl font-semibold text-indigo-800">Latest Video Analyses (Clustered by Scene)</h2>
-                <span id="last-updated" class="text-sm font-medium text-indigo-500"></span>
+    <!-- Statistics Bar -->
+    <div class="bg-indigo-50 border-b border-indigo-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-indigo-700" id="stat-total">0</div>
+                    <div class="text-xs text-gray-600">Total Videos</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-green-600" id="stat-keep">0</div>
+                    <div class="text-xs text-gray-600">Keep</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-red-600" id="stat-discard">0</div>
+                    <div class="text-xs text-gray-600">Discard</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-indigo-600" id="stat-duration">0:00</div>
+                    <div class="text-xs text-gray-600">Total Duration</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-amber-600" id="stat-rating">0.0</div>
+                    <div class="text-xs text-gray-600">Avg Rating</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-xl font-bold text-gray-700" id="stat-showing">0/0</div>
+                    <div class="text-xs text-gray-600">Showing</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters and Controls -->
+    <div class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-wrap gap-4 items-center">
+                <!-- Search -->
+                <div class="flex-1 min-w-[200px]">
+                    <input 
+                        type="text" 
+                        id="search-input"
+                        placeholder="Search descriptions..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    />
+                </div>
+                
+                <!-- Keep Status Filter -->
+                <div class="flex gap-1 bg-gray-100 rounded-lg p-1">
+                    <button 
+                        data-filter="all" 
+                        class="keep-filter-btn px-3 py-1 rounded text-sm font-medium transition-colors bg-indigo-600 text-white"
+                    >
+                        All
+                    </button>
+                    <button 
+                        data-filter="keep" 
+                        class="keep-filter-btn px-3 py-1 rounded text-sm font-medium transition-colors text-gray-700 hover:bg-gray-200"
+                    >
+                        Keep
+                    </button>
+                    <button 
+                        data-filter="discard" 
+                        class="keep-filter-btn px-3 py-1 rounded text-sm font-medium transition-colors text-gray-700 hover:bg-gray-200"
+                    >
+                        Discard
+                    </button>
+                </div>
+                
+                <!-- Auto-refresh -->
+                <div class="flex items-center gap-2">
+                    <select 
+                        id="refresh-interval"
+                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="30">Refresh: 30s</option>
+                        <option value="60" selected>Refresh: 60s</option>
+                        <option value="120">Refresh: 2min</option>
+                        <option value="0">Manual only</option>
+                    </select>
+                    <button 
+                        id="pause-refresh-btn"
+                        class="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium transition-colors"
+                        title="Pause auto-refresh"
+                    >
+                        ⏸
+                    </button>
+                    <span id="refresh-status" class="text-xs text-gray-500">Next: 60s</span>
+                </div>
+                
+                <!-- Clear Filters -->
+                <button 
+                    id="clear-filters-btn"
+                    class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium transition-colors"
+                >
+                    Clear Filters
+                </button>
             </div>
             
-                        <div class="overflow-x-auto results-container">
-                <table id="results-table" class="min-w-full border-collapse">
-                    <thead>
-                        <tr class="bg-indigo-100">
-                            <th class="px-4 py-3 text-left text-sm font-semibold text-indigo-900 w-32">Thumbnail</th>
-                            <th class="px-4 py-3 text-left text-sm font-semibold text-indigo-900">File</th>
-                            <th class="px-4 py-3 text-left text-sm font-semibold text-indigo-900">Description</th>
-                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-24">Type</th>
-                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-24">Rating</th>
-                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-32">In Time</th>
-                            <th class="px-4 py-3 text-center text-sm font-semibold text-indigo-900 w-32">Out Time</th>
+            <!-- Advanced Filters Row -->
+            <div class="mt-3 flex flex-wrap gap-3" id="advanced-filters">
+                <!-- Clip Type Filter -->
+                <div class="flex-1 min-w-[150px]">
+                    <select 
+                        id="clip-type-filter"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="">All Clip Types</option>
+                    </select>
+                </div>
+                
+                <!-- Rating Filter -->
+                <div class="flex-1 min-w-[200px]">
+                    <label class="text-xs text-gray-600 block mb-1">Min Rating: <span id="rating-value">0.0</span></label>
+                    <input 
+                        type="range" 
+                        id="rating-filter"
+                        min="0" 
+                        max="1" 
+                        step="0.1" 
+                        value="0"
+                        class="w-full"
+                    />
+                </div>
+                
+                <!-- Sort -->
+                <div class="flex-1 min-w-[150px]">
+                    <select 
+                        id="sort-select"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="timestamp-asc">Oldest First</option>
+                        <option value="timestamp-desc">Newest First</option>
+                        <option value="rating-desc">Highest Rated</option>
+                        <option value="rating-asc">Lowest Rated</option>
+                        <option value="duration-desc">Longest First</option>
+                        <option value="duration-asc">Shortest First</option>
+                        <option value="filename-asc">Filename A-Z</option>
+                        <option value="filename-desc">Filename Z-A</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <!-- Loading State -->
+            <div id="loading-state" class="p-12 text-center">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
+                <p class="mt-4 text-gray-600">Loading classifications...</p>
+            </div>
+            
+            <!-- Error State -->
+            <div id="error-state" class="p-12 text-center hidden">
+                <div class="text-red-600 text-5xl mb-4">⚠️</div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">Connection Error</h3>
+                <p class="text-gray-600 mb-4">Could not load video classifications</p>
+                <button 
+                    onclick="fetchResults(true)" 
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                    Retry
+                </button>
+            </div>
+            
+            <!-- Empty State -->
+            <div id="empty-state" class="p-12 text-center hidden">
+                <div class="text-gray-400 text-5xl mb-4">📹</div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">No Videos Found</h3>
+                <p class="text-gray-600">No classified videos match your current filters</p>
+            </div>
+            
+            <!-- Table -->
+            <div id="table-container" class="overflow-x-auto custom-scrollbar hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider w-28">
+                                Thumbnail
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                Filename
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                Description
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-32">
+                                Type
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-24">
+                                Rating
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-24">
+                                Status
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider w-24">
+                                Duration
+                            </th>
                         </tr>
                     </thead>
-                    <tbody id="table-body">
-                        <!-- Rows will be dynamically inserted here -->
+                    <tbody id="table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Rows will be inserted here -->
                     </tbody>
                 </table>
             </div>
         </div>
+    </main>
 
-        <!-- Footer / Instructions -->
-        <footer class="mt-8 text-center text-gray-500 text-sm">
-            <p class="mb-2">
-                <a href="/" class="text-indigo-600 hover:text-indigo-800 font-semibold">
-                    ← Back to Workflow Launcher
-                </a>
-            </p>
-            <p>Clips are ordered by **timestamp (Earliest at Top)** and grouped into a single "Scene" if their timestamps are within 30 minutes of each other.</p>
-            <p>This dashboard auto-updates every 60 seconds using a lightweight metadata-only endpoint.</p>
-        </footer>
-    </div>
-    
-    <!-- Fullscreen Modal for Video Playback/Thumbnail View -->
-    <div id="thumbnail-modal" class="fixed inset-0 z-50 bg-black bg-opacity-80 hidden items-center justify-center p-4 transition-opacity duration-300" onclick="closeModal()">
-        <!-- Modal Size Increased to max-w-6xl. CHANGED overflow-hidden to overflow-y-auto to allow scrolling. -->
-        <div class="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto" onclick="event.stopPropagation()">
+    <!-- Footer -->
+    <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-gray-600">
+        <p>Last updated: <span id="last-updated" class="font-medium">Never</span></p>
+        <p class="mt-1">
+            Videos grouped by scene (within 30 minutes) • 
+            <a href="/" class="text-indigo-600 hover:text-indigo-800">Back to Launcher</a>
+        </p>
+    </footer>
+
+    <!-- Modal for Video Detail -->
+    <div 
+        id="video-modal" 
+        class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-backdrop bg-black bg-opacity-75"
+        onclick="closeModal()"
+    >
+        <div 
+            class="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto"
+            onclick="event.stopPropagation()"
+        >
+            <!-- Modal Header -->
             <div class="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
-                <h3 id="modal-title" class="text-xl font-semibold text-indigo-800 truncate"></h3>
-                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <h3 id="modal-title" class="text-xl font-semibold text-indigo-800 truncate pr-4"></h3>
+                <button 
+                    onclick="closeModal()" 
+                    class="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition"
+                >
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
                 </button>
             </div>
-            <!-- Modal Content: Two columns for Video/Image and Metadata -->
+            
+            <!-- Modal Content -->
             <div class="p-4 flex flex-col md:flex-row gap-6">
-                <!-- Left Column: Video Player - md:w-2/3 (66% width) -->
-                <div class="md:w-2/3 flex flex-col justify-center items-center p-2 bg-gray-100 rounded-lg">
-                    <!-- VIDEO PLAYER ELEMENT - NOTE: Autoplay is omitted here to prevent automatic playback. -->
-                    <video id="modal-video" controls class="max-w-full max-h-[80vh] object-contain rounded-md shadow-lg w-full h-auto" style="display: none;"></video>
-                    <!-- FALLBACK IMAGE/POSTER ELEMENT -->
-                    <img id="modal-image" src="" alt="Thumbnail/Poster" class="max-w-full max-h-[80vh] object-contain rounded-md shadow-lg" style="display: none;">
-                    <div id="video-message" class="p-4 text-sm text-center text-gray-500" style="display: none;"></div>
+                <!-- Video Player (Left - 66%) -->
+                <div class="md:w-2/3 flex flex-col justify-center items-center bg-gray-100 rounded-lg p-2">
+                    <video 
+                        id="modal-video" 
+                        controls 
+                        class="max-w-full max-h-[70vh] object-contain rounded-md shadow-lg w-full"
+                    ></video>
                 </div>
-                <!-- Right Column: Details - md:w-1/3 (33% width) -->
-                <div class="md:w-1/3 p-2 space-y-3 text-sm">
-                    <h4 class="text-lg font-bold text-indigo-700 border-b pb-1">Video Metadata</h4>
+                
+                <!-- Metadata Panel (Right - 33%) -->
+                <div class="md:w-1/3 space-y-4 text-sm">
+                    <h4 class="text-lg font-bold text-indigo-700 border-b pb-2">Video Details</h4>
                     
-                    <div class="text-xs text-gray-500">
-                        <span class="font-semibold text-gray-600">Original File:</span>
-                        <span id="modal-filename" class="ml-1 font-medium text-gray-700 truncate block"></span>
-                    </div>
-
-                    <div id="modal-short-desc" style="display: none;" class="text-base font-semibold text-gray-800"></div>
-
-                    <!-- Clip Type, Length, Timestamp, AND Scene Indicators Row -->
-                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
-                        <div id="modal-clip-type" class="text-xs px-3 py-1 font-medium rounded-full"></div>
-                        <div id="modal-length" class="text-sm font-medium text-indigo-600"></div>
-                        <div id="modal-timestamp" class="text-sm text-gray-500"></div>
-                        
-                        <!-- SCENE INDICATORS -->
-                        <div id="scene-indicator-start" style="display: none;" class="px-3 py-1 text-xs font-bold rounded-full bg-rose-100 text-rose-700 border border-rose-400">START OF SCENE</div>
-                        <div id="scene-indicator-end" style="display: none;" class="px-3 py-1 text-xs font-bold rounded-full bg-cyan-100 text-cyan-700 border border-cyan-400">END OF SCENE</div>
+                    <!-- Filename -->
+                    <div>
+                        <span class="text-xs text-gray-500 font-semibold">Filename:</span>
+                        <p id="modal-filename" class="text-sm font-medium text-gray-800 break-all"></p>
                     </div>
                     
-                    <!-- NEW: EDITING DECISIONS SECTION with INTERACTIVE CONTROLS -->
-                    <h4 class="text-lg font-bold text-indigo-700 border-b pb-1 mt-4">Editing Decisions</h4>
-                    <div class="space-y-4">
-                        <!-- KEEP / DISCARD Toggler -->
-                        <div class="flex flex-col gap-2">
-                            <span class="font-semibold text-gray-600">Action:</span>
-                            <button id="toggle-keep-btn" 
-                                class="keep-toggle px-4 py-2 text-sm font-bold rounded-lg shadow-md hover:shadow-lg transition">
-                                Toggle Status
-                            </button>
-                            <!-- Visual status indicator (text updated by JS) -->
-                            <div id="modal-keep-status" class="px-3 py-1 text-xs font-bold rounded-full text-center"></div>
+                    <!-- Short Description -->
+                    <div id="modal-short-desc" class="text-base font-semibold text-gray-800"></div>
+                    
+                    <!-- Metadata Row -->
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <div id="modal-clip-type" class="px-3 py-1 text-xs font-medium rounded-full"></div>
+                        <div id="modal-rating-display" class="flex items-center gap-1"></div>
+                    </div>
+                    
+                    <!-- Stats -->
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <span class="text-gray-500">Timestamp:</span>
+                            <p id="modal-timestamp" class="font-medium text-gray-700"></p>
                         </div>
-
-                        <!-- CLIP CUT DURATION Input -->
-                        <div class="flex flex-col gap-2">
-                            <div class="flex items-center justify-between">
-                                <span class="font-semibold text-gray-600">Cut Length (Seconds):</span>
-                                <span id="modal-cut-source" class="text-xs text-gray-400"></span>
-                            </div>
-                            
-                            <!-- Quick Set Buttons (2s, 4s, 8s, 16s, FULL) -->
-                            <div id="quick-set-buttons" class="grid grid-cols-5 gap-1.5">
-                                <button type="button" data-duration="2" data-key="q" class="quick-set-btn bg-gray-200 text-gray-800 p-1 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">2s (Q)</button>
-                                <button type="button" data-duration="4" data-key="w" class="quick-set-btn bg-gray-200 text-gray-800 p-1 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">4s (W)</button>
-                                <button type="button" data-duration="8" data-key="e" class="quick-set-btn bg-gray-200 text-gray-800 p-1 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">8s (E)</button>
-                                <button type="button" data-duration="16" data-key="r" class="quick-set-btn bg-gray-200 text-gray-800 p-1 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">16s (R)</button>
-                                <button type="button" data-duration="full" data-key="t" class="quick-set-btn bg-indigo-100 text-indigo-700 p-1 rounded-lg text-xs font-bold hover:bg-indigo-200 transition">FULL (T)</button>
-                            </div>
-
-                            <!-- Custom Input Area -->
-                            <div class="flex gap-2 mt-2">
-                                <input id="cut-duration-input" type="number" step="0.1" min="0" 
-                                       placeholder="Enter custom seconds (0 for full video)"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                                <button id="save-duration-btn" 
-                                    class="bg-indigo-500 text-white px-3 py-2 text-sm font-medium rounded-lg hover:bg-indigo-600 transition disabled:opacity-50"
-                                    disabled>
-                                    Save Custom
-                                </button>
-                            </div>
-                            <p id="modal-cut-duration-info" class="text-xs text-gray-500 mt-1"></p>
+                        <div>
+                            <span class="text-gray-500">Length:</span>
+                            <p id="modal-length" class="font-medium text-gray-700"></p>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Status:</span>
+                            <p id="modal-keep-status" class="font-medium"></p>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Duration:</span>
+                            <p id="modal-duration" class="font-medium text-gray-700"></p>
                         </div>
                     </div>
+                    
+                    <!-- In/Out Times -->
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <span class="text-gray-500">In Time:</span>
+                            <p id="modal-in-time" class="font-mono text-xs text-gray-700"></p>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Out Time:</span>
+                            <p id="modal-out-time" class="font-mono text-xs text-gray-700"></p>
+                        </div>
+                    </div>
+                    
+                    <!-- Tags -->
+                    <div>
+                        <span class="text-xs text-gray-500 font-semibold">Tags:</span>
+                        <div id="modal-tags" class="flex flex-wrap gap-1 mt-1"></div>
+                    </div>
+                    
+                    <!-- Scene Indicators -->
+                    <div id="modal-scene-indicators" class="flex gap-2"></div>
                     
                     <!-- Long Description -->
-                    <div class="pt-2 border-t mt-3">
+                    <div class="pt-2 border-t">
                         <h5 class="text-sm font-semibold text-gray-600 mb-1">Full Description</h5>
-                        <!-- Removed max-h-40 and overflow-y-auto to allow full expansion -->
-                        <p id="modal-long-desc" class="text-xs text-gray-600 p-1 border rounded bg-gray-50"></p>
+                        <p id="modal-long-desc" class="text-xs text-gray-600 p-2 border rounded bg-gray-50 max-h-40 overflow-y-auto custom-scrollbar"></p>
                     </div>
                     
-                    <!-- Subtitle/Transcript -->
-                    <div id="subtitle-section" class="pt-2 border-t mt-3" style="display: none;">
-                        <div class="flex justify-between items-center mb-1">
+                    <!-- Transcript -->
+                    <div id="modal-transcript-section" class="pt-2 border-t hidden">
+                        <div class="flex justify-between items-center mb-2">
                             <h5 class="text-sm font-semibold text-gray-600">Transcript</h5>
-                            <button id="toggle-subtitle-btn" class="text-xs text-indigo-600 hover:text-indigo-800">
+                            <button 
+                                id="toggle-transcript-btn"
+                                class="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                            >
                                 Show
                             </button>
                         </div>
-                        <div id="subtitle-content" class="text-xs text-gray-600 p-2 border rounded bg-gray-50 max-h-60 overflow-y-auto" style="display: none; white-space: pre-wrap; font-family: monospace;"></div>
+                        <div 
+                            id="modal-transcript-content" 
+                            class="text-xs text-gray-600 p-2 border rounded bg-gray-50 max-h-48 overflow-y-auto custom-scrollbar hidden whitespace-pre-wrap font-mono"
+                        ></div>
+                    </div>
+                    
+                    <!-- Navigation Hint -->
+                    <div class="pt-2 border-t text-xs text-gray-500 text-center">
+                        Use ← → arrows to navigate • ESC to close
                     </div>
                 </div>
             </div>
@@ -232,776 +440,826 @@
     </div>
 
     <script>
-        const tableBody = document.getElementById('table-body');
-        const lastUpdatedEl = document.getElementById('last-updated');
-        const statusEl = document.getElementById('status-message');
-        
-        const modal = document.getElementById('thumbnail-modal');
-        const modalVideo = document.getElementById('modal-video');
-        const modalImage = document.getElementById('modal-image');
-        const modalTitle = document.getElementById('modal-title');
-        const videoMessage = document.getElementById('video-message');
-        
-        const modalFilename = document.getElementById('modal-filename');
-        const modalShortDesc = document.getElementById('modal-short-desc');
-        const modalLongDesc = document.getElementById('modal-long-desc');
-        const modalClipType = document.getElementById('modal-clip-type');
-        const modalLength = document.getElementById('modal-length');
-        const modalTimestamp = document.getElementById('modal-timestamp');
-        
-        // Scene Indicator Elements
-        const sceneStartIndicator = document.getElementById('scene-indicator-start');
-        const sceneEndIndicator = document.getElementById('scene-indicator-end');
-
-        // Editing Decision Elements and Controls
-        const modalKeepStatus = document.getElementById('modal-keep-status');
-        const toggleKeepBtn = document.getElementById('toggle-keep-btn');
-        const cutDurationInput = document.getElementById('cut-duration-input');
-        const saveDurationBtn = document.getElementById('save-duration-btn');
-        const modalCutDurationInfo = document.getElementById('modal-cut-duration-info');
-        const modalCutSource = document.getElementById('modal-cut-source');
-        const quickSetButtonsContainer = document.getElementById('quick-set-buttons');
-        
-        // Subtitle Elements
-        const subtitleSection = document.getElementById('subtitle-section');
-        const subtitleContent = document.getElementById('subtitle-content');
-        const toggleSubtitleBtn = document.getElementById('toggle-subtitle-btn');
-
-        // Global state for navigation and current file context
-        let currentResults = []; // This will now hold metadata *without* thumbnails
-        let currentIndex = -1;
-        let currentFilename = null;
-        let currentSubtitle = null;
-
-        // Map for keyboard shortcuts
-        const durationKeyMap = {
-            'q': 2,
-            'w': 4,
-            'e': 8,
-            'r': 16,
-            't': 'full'
-        };
-
-        // --- SCENE CLUSTERING CONFIGURATION ---
-        const THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
+        // ===== CONSTANTS AND CONFIGURATION =====
+        const SCENE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
         const SCENE_COLORS = [
-            'border-l-4 border-rose-500 bg-rose-50/70',
-            'border-l-4 border-indigo-500 bg-indigo-50/70',
-            'border-l-4 border-green-500 bg-green-50/70',
-            'border-l-4 border-amber-500 bg-amber-50/70',
-            'border-l-4 border-purple-500 bg-purple-50/70',
-            'border-l-4 border-cyan-500 bg-cyan-50/70',
+            'border-l-4 border-rose-500 bg-rose-50/50',
+            'border-l-4 border-indigo-500 bg-indigo-50/50',
+            'border-l-4 border-green-500 bg-green-50/50',
+            'border-l-4 border-amber-500 bg-amber-50/50',
+            'border-l-4 border-purple-500 bg-purple-50/50',
+            'border-l-4 border-cyan-500 bg-cyan-50/50',
         ];
-
-        /**
-         * Converts ISO timestamp (from SQLite) into a human-readable format.
-         */
+        
+        const CLIP_TYPE_COLORS = {
+            'pov': 'bg-blue-100 text-blue-800',
+            'insert': 'bg-green-100 text-green-800',
+            'establishing': 'bg-cyan-100 text-cyan-800',
+            'close': 'bg-green-100 text-green-800',
+            'wide': 'bg-cyan-100 text-cyan-800',
+            'aerial': 'bg-purple-100 text-purple-800',
+            'drone': 'bg-purple-100 text-purple-800',
+            'b-roll': 'bg-yellow-100 text-yellow-800',
+            'scenic': 'bg-yellow-100 text-yellow-800',
+        };
+        
+        // ===== STATE MANAGEMENT =====
+        let allResults = []; // All videos from API
+        let filteredResults = []; // After applying filters
+        let currentIndex = -1; // Current video in modal
+        let refreshTimer = null;
+        let isPaused = false;
+        let nextRefreshTime = null;
+        
+        // Filter state
+        let filters = {
+            search: '',
+            keepStatus: 'all',
+            clipType: '',
+            minRating: 0.0,
+        };
+        
+        // Sort state
+        let sortConfig = {
+            field: 'timestamp',
+            direction: 'asc'
+        };
+        
+        // ===== DOM ELEMENTS =====
+        const elements = {
+            // States
+            loadingState: document.getElementById('loading-state'),
+            errorState: document.getElementById('error-state'),
+            emptyState: document.getElementById('empty-state'),
+            tableContainer: document.getElementById('table-container'),
+            tableBody: document.getElementById('table-body'),
+            
+            // Statistics
+            statTotal: document.getElementById('stat-total'),
+            statKeep: document.getElementById('stat-keep'),
+            statDiscard: document.getElementById('stat-discard'),
+            statDuration: document.getElementById('stat-duration'),
+            statRating: document.getElementById('stat-rating'),
+            statShowing: document.getElementById('stat-showing'),
+            
+            // Filters
+            searchInput: document.getElementById('search-input'),
+            keepFilterBtns: document.querySelectorAll('.keep-filter-btn'),
+            clipTypeFilter: document.getElementById('clip-type-filter'),
+            ratingFilter: document.getElementById('rating-filter'),
+            ratingValue: document.getElementById('rating-value'),
+            clearFiltersBtn: document.getElementById('clear-filters-btn'),
+            sortSelect: document.getElementById('sort-select'),
+            
+            // Refresh controls
+            refreshInterval: document.getElementById('refresh-interval'),
+            pauseRefreshBtn: document.getElementById('pause-refresh-btn'),
+            refreshStatus: document.getElementById('refresh-status'),
+            lastUpdated: document.getElementById('last-updated'),
+            
+            // Modal
+            modal: document.getElementById('video-modal'),
+            modalVideo: document.getElementById('modal-video'),
+            modalTitle: document.getElementById('modal-title'),
+            modalFilename: document.getElementById('modal-filename'),
+            modalShortDesc: document.getElementById('modal-short-desc'),
+            modalLongDesc: document.getElementById('modal-long-desc'),
+            modalClipType: document.getElementById('modal-clip-type'),
+            modalRatingDisplay: document.getElementById('modal-rating-display'),
+            modalTimestamp: document.getElementById('modal-timestamp'),
+            modalLength: document.getElementById('modal-length'),
+            modalKeepStatus: document.getElementById('modal-keep-status'),
+            modalDuration: document.getElementById('modal-duration'),
+            modalInTime: document.getElementById('modal-in-time'),
+            modalOutTime: document.getElementById('modal-out-time'),
+            modalTags: document.getElementById('modal-tags'),
+            modalSceneIndicators: document.getElementById('modal-scene-indicators'),
+            modalTranscriptSection: document.getElementById('modal-transcript-section'),
+            modalTranscriptContent: document.getElementById('modal-transcript-content'),
+            toggleTranscriptBtn: document.getElementById('toggle-transcript-btn'),
+        };
+        
+        // ===== UTILITY FUNCTIONS =====
+        
         function formatTimestamp(isoString) {
             if (!isoString) return 'N/A';
             const date = new Date(isoString);
-            // Format as YYYY-MM-DD HH:MM:SS
-            return date.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) + ' ' + 
-                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit' 
+            }) + ' ' + date.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+            });
         }
-
-        /**
-         * Converts ISO timestamp to Unix milliseconds for calculations.
-         */
+        
+        function formatTimecode(timestamp) {
+            if (!timestamp) return 'N/A';
+            try {
+                const [time, milliseconds] = timestamp.split('.');
+                const [hours, minutes, seconds] = time.split(':').map(num => num.padStart(2, '0'));
+                const ms = milliseconds ? milliseconds.padEnd(4, '0').slice(0, 4) : '0000';
+                return `${hours}:${minutes}:${seconds}.${ms}`;
+            } catch {
+                return 'Invalid';
+            }
+        }
+        
+        function formatDuration(seconds) {
+            if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return 'N/A';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            
+            if (hours > 0) {
+                return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+            return `${minutes}:${String(secs).padStart(2, '0')}`;
+        }
+        
         function getTimeInMs(isoString) {
             if (!isoString) return 0;
             return new Date(isoString).getTime();
         }
-
-        /**
-         * Formats a timestamp in the format HH:MM:SS.ssss
-         */
-        function formatTimecode(timestamp) {
-            if (!timestamp) return 'N/A';
-            try {
-                // Extract hours, minutes, seconds, and milliseconds
-                const [time, milliseconds] = timestamp.split('.');
-                const [hours, minutes, seconds] = time.split(':').map(num => num.padStart(2, '0'));
-                const ms = milliseconds ? milliseconds.padEnd(4, '0').slice(0, 4) : '0000';
-                
-                return `${hours}:${minutes}:${seconds}.${ms}`;
-            } catch (error) {
-                console.error('Error formatting timecode:', error);
-                return 'Invalid';
+        
+        function getClipTypeClass(clipType) {
+            if (!clipType) return 'bg-gray-100 text-gray-800';
+            const type = clipType.toLowerCase();
+            for (const [key, colorClass] of Object.entries(CLIP_TYPE_COLORS)) {
+                if (type.includes(key)) {
+                    return colorClass;
+                }
             }
-        }
-
-        /**
-         * Converts seconds into MM:SS.S format (including one decimal place for cut precision).
-         */
-        function formatLength(totalSeconds) {
-            if (typeof totalSeconds !== 'number' || isNaN(totalSeconds) || totalSeconds < 0) return 'N/A';
-            // Round to 1 decimal point for display
-            totalSeconds = parseFloat(totalSeconds.toFixed(1)); 
-            const minutes = Math.floor(totalSeconds / 60);
-            const seconds = Math.floor(totalSeconds % 60);
-            const remainder = totalSeconds % 1;
-            
-            let formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            // If there's a decimal component (e.g., 420.5 seconds), add the decimal part
-            if (remainder > 0) {
-                 formatted += `.${String(Math.round(remainder * 10)).charAt(0)}`;
-            }
-
-            return formatted;
-        }
-
-        /**
-         * Swaps the thumbnail for the video player and starts playback.
-         */
-        function playVideo() {
-            // Only proceed if the modal is open and the image is marked as a poster
-            if (modal.classList.contains('flex') && modalImage.classList.contains('video-poster')) {
-                modalImage.style.display = 'none';
-                modalVideo.style.display = 'block';
-                modalImage.classList.remove('cursor-pointer', 'video-poster');
-                
-                // Start playback on user interaction
-                modalVideo.play().catch(error => {
-                    console.error("Error attempting to play video:", error);
-                    // Provide feedback if playback fails
-                    videoMessage.style.display = 'block';
-                    videoMessage.textContent = 'Could not start video playback automatically.';
-                });
-            }
+            return 'bg-gray-100 text-gray-800';
         }
         
-        /**
-         * Clears the modal, stops video playback, and hides the modal container.
-         */
-        function closeModal() {
-            modal.classList.remove('flex');
-            modal.classList.add('hidden');
-            document.body.style.overflow = ''; // Restore background scrolling
-            currentIndex = -1; // Reset index when closed
-            currentFilename = null;
-            modalVideo.pause(); // Stop video playback
-            // Reset media display back to thumbnail/poster view
-            modalVideo.style.display = 'none';
-            modalImage.style.display = 'block';
-            modalImage.classList.add('cursor-pointer', 'video-poster');
-        }
-
-        /**
-         * Helper function to send POST requests to the new API endpoints.
-         */
-        async function sendUpdate(url, payload) {
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.statusText}`);
-                }
-                // Refresh the table using the lightweight endpoint to show the immediate update
-                fetchResults(false); 
-                return true;
-            } catch (error) {
-                console.error("Update failed:", error);
-                return false;
-            }
-        }
-
-        /**
-         * Toggles the 'keep' status and updates the database.
-         */
-        async function sendKeepUpdate() {
-            const result = currentResults[currentIndex];
-            if (!result || !currentFilename) return;
-
-            // Toggle the status: 1 -> 0, 0 -> 1
-            const newKeepStatus = result.keep === 1 ? 0 : 1;
+        function renderStars(rating) {
+            if (rating == null) return '<span class="text-gray-400 text-xs">No rating</span>';
             
-            toggleKeepBtn.disabled = true;
-            toggleKeepBtn.textContent = 'Saving...';
-
-            const success = await sendUpdate('/api/update_keep', { 
-                filename: currentFilename, 
-                keep: newKeepStatus 
-            });
-
-            if (success) {
-                // Manually update the local data temporarily to reflect change immediately in the modal
-                result.keep = newKeepStatus; 
-                updateKeepStatusUI(result);
-            } else {
-                // Restore the UI state if saving fails
-                updateKeepStatusUI(result); 
-                console.error("Failed to toggle keep status.");
-            }
-            toggleKeepBtn.disabled = false;
-        }
-
-        /**
-         * Handles updating the clip duration, either from a quick button or custom input.
-         * @param {number|string|null} [durationValue] - If provided, uses this value (e.g., 2, 4, 8, 16, or 'full'). If null/undefined, uses input field value.
-         */
-        async function handleDurationUpdate(durationValue = undefined) {
-            if (!currentFilename || currentIndex === -1) return;
-
-            let duration = null;
-            let source = '';
-
-            if (durationValue !== undefined) {
-                // Quick button/key press path
-                if (durationValue === 'full' || durationValue === 0) {
-                    duration = null;
-                    source = 'Quick (FULL)';
+            const stars = [];
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = (rating % 1) >= 0.5;
+            
+            for (let i = 0; i < 5; i++) {
+                if (i < fullStars) {
+                    stars.push('<span class="star-filled">★</span>');
+                } else if (i === fullStars && hasHalfStar) {
+                    stars.push('<span class="star-filled">★</span>');
                 } else {
-                    duration = parseFloat(durationValue);
-                    source = `Quick (${durationValue}s)`;
+                    stars.push('<span class="star-empty">★</span>');
                 }
-            } else {
-                // Custom input path
-                const inputValue = cutDurationInput.value.trim();
-                if (inputValue === '') {
-                    duration = null; // Reset to full video
-                    source = 'Custom (FULL)';
-                } else {
-                    duration = parseFloat(inputValue);
-                    if (isNaN(duration) || duration < 0) {
-                        console.error('Invalid duration entered.');
-                        return;
+            }
+            
+            return stars.join('') + ` <span class="text-xs text-gray-600 ml-1">${rating.toFixed(1)}</span>`;
+        }
+        
+        // ===== DATA PROCESSING =====
+        
+        function processSceneClustering(results) {
+            if (results.length === 0) return results;
+            
+            // Sort by timestamp
+            const sorted = [...results].sort((a, b) => 
+                getTimeInMs(a.video_timestamp) - getTimeInMs(b.video_timestamp)
+            );
+            
+            // Assign scene IDs
+            let currentSceneId = 0;
+            let lastTimestampMs = 0;
+            
+            sorted.forEach((result, index) => {
+                const currentTimestampMs = getTimeInMs(result.video_timestamp);
+                const timeDiff = currentTimestampMs - lastTimestampMs;
+                
+                if (timeDiff > SCENE_THRESHOLD_MS || index === 0) {
+                    currentSceneId++;
+                    if (index > 0) {
+                        sorted[index - 1].isLastInScene = true;
                     }
-                    source = 'Custom';
+                    result.isFirstInScene = true;
+                    result.isLastInScene = false;
+                } else {
+                    result.isFirstInScene = false;
+                    result.isLastInScene = false;
                 }
-            }
-            
-            const originalLength = currentResults[currentIndex].video_length_seconds;
-            if (duration !== null && duration > originalLength) {
-                console.warn(`Duration ${duration}s exceeds video length ${originalLength}s. Setting to max length.`);
-                duration = originalLength; 
-                // Note: The UI for the input will be updated in updateCutDurationUI
-            }
-
-            // Set buttons/input state during submission
-            saveDurationBtn.disabled = true;
-            saveDurationBtn.textContent = 'Saving...';
-            document.querySelectorAll('.quick-set-btn').forEach(btn => btn.disabled = true);
-
-            const success = await sendUpdate('/api/update_duration', { 
-                filename: currentFilename, 
-                duration: duration 
+                
+                result.sceneId = currentSceneId;
+                lastTimestampMs = currentTimestampMs;
             });
-
-            if (success) {
-                // Manually update the local data temporarily
-                currentResults[currentIndex].clip_cut_duration = duration;
-                updateCutDurationUI(currentResults[currentIndex], source);
+            
+            // Mark last item as end of scene
+            if (sorted.length > 0) {
+                sorted[sorted.length - 1].isLastInScene = true;
             }
             
-            // Restore buttons/input state
-            saveDurationBtn.disabled = true; // Disable until custom input changes again
-            saveDurationBtn.textContent = 'Save Custom';
-            document.querySelectorAll('.quick-set-btn').forEach(btn => btn.disabled = false);
+            return sorted;
         }
-
         
-        /**
-         * Updates the visual state of the Keep/Discard controls in the modal.
-         */
-        function updateKeepStatusUI(result) {
+        function applyFilters(results) {
+            return results.filter(result => {
+                // Search filter
+                if (filters.search) {
+                    const searchLower = filters.search.toLowerCase();
+                    const shortDesc = (result.video_description_short || '').toLowerCase();
+                    const longDesc = (result.video_description_long || '').toLowerCase();
+                    if (!shortDesc.includes(searchLower) && !longDesc.includes(searchLower)) {
+                        return false;
+                    }
+                }
+                
+                // Keep status filter
+                if (filters.keepStatus !== 'all') {
+                    const isKeep = result.keep === 1;
+                    if (filters.keepStatus === 'keep' && !isKeep) return false;
+                    if (filters.keepStatus === 'discard' && isKeep) return false;
+                }
+                
+                // Clip type filter
+                if (filters.clipType && result.primary_shot_type !== filters.clipType) {
+                    return false;
+                }
+                
+                // Rating filter
+                if (result.rating != null && result.rating < filters.minRating) {
+                    return false;
+                }
+                
+                return true;
+            });
+        }
+        
+        function applySorting(results) {
+            const sorted = [...results];
+            
+            sorted.sort((a, b) => {
+                let aVal, bVal;
+                
+                switch (sortConfig.field) {
+                    case 'timestamp':
+                        aVal = getTimeInMs(a.video_timestamp);
+                        bVal = getTimeInMs(b.video_timestamp);
+                        break;
+                    case 'rating':
+                        aVal = a.rating || 0;
+                        bVal = b.rating || 0;
+                        break;
+                    case 'duration':
+                        aVal = a.video_length_seconds || 0;
+                        bVal = b.video_length_seconds || 0;
+                        break;
+                    case 'filename':
+                        aVal = (a.filename || '').toLowerCase();
+                        bVal = (b.filename || '').toLowerCase();
+                        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                        return 0;
+                    default:
+                        return 0;
+                }
+                
+                if (sortConfig.direction === 'asc') {
+                    return aVal - bVal;
+                } else {
+                    return bVal - aVal;
+                }
+            });
+            
+            return sorted;
+        }
+        
+        function calculateStatistics(results) {
+            const stats = {
+                total: results.length,
+                keep: 0,
+                discard: 0,
+                totalDuration: 0,
+                totalRating: 0,
+                ratedCount: 0,
+            };
+            
+            results.forEach(result => {
+                if (result.keep === 1) {
+                    stats.keep++;
+                } else {
+                    stats.discard++;
+                }
+                
+                if (result.video_length_seconds) {
+                    stats.totalDuration += result.video_length_seconds;
+                }
+                
+                if (result.rating != null) {
+                    stats.totalRating += result.rating;
+                    stats.ratedCount++;
+                }
+            });
+            
+            return stats;
+        }
+        
+        function updateStatistics() {
+            const allStats = calculateStatistics(allResults);
+            const filteredStats = calculateStatistics(filteredResults);
+            
+            elements.statTotal.textContent = allStats.total;
+            elements.statKeep.textContent = allStats.keep;
+            elements.statDiscard.textContent = allStats.discard;
+            elements.statDuration.textContent = formatDuration(allStats.totalDuration);
+            elements.statRating.textContent = allStats.ratedCount > 0 
+                ? (allStats.totalRating / allStats.ratedCount).toFixed(1)
+                : '0.0';
+            elements.statShowing.textContent = `${filteredResults.length}/${allStats.total}`;
+        }
+        
+        // ===== RENDERING =====
+        
+        function showLoading() {
+            elements.loadingState.classList.remove('hidden');
+            elements.errorState.classList.add('hidden');
+            elements.emptyState.classList.add('hidden');
+            elements.tableContainer.classList.add('hidden');
+        }
+        
+        function showError() {
+            elements.loadingState.classList.add('hidden');
+            elements.errorState.classList.remove('hidden');
+            elements.emptyState.classList.add('hidden');
+            elements.tableContainer.classList.add('hidden');
+        }
+        
+        function showEmpty() {
+            elements.loadingState.classList.add('hidden');
+            elements.errorState.classList.add('hidden');
+            elements.emptyState.classList.remove('hidden');
+            elements.tableContainer.classList.add('hidden');
+        }
+        
+        function showTable() {
+            elements.loadingState.classList.add('hidden');
+            elements.errorState.classList.add('hidden');
+            elements.emptyState.classList.add('hidden');
+            elements.tableContainer.classList.remove('hidden');
+        }
+        
+        function renderTable() {
+            if (filteredResults.length === 0) {
+                showEmpty();
+                return;
+            }
+            
+            showTable();
+            elements.tableBody.innerHTML = '';
+            
+            filteredResults.forEach((result, index) => {
+                // Scene break separator
+                if (result.isFirstInScene && index > 0) {
+                    const separatorRow = document.createElement('tr');
+                    separatorRow.innerHTML = `
+                        <td colspan="7" class="p-2 border-t-4 border-dashed border-gray-300 bg-gray-100 text-center text-xs font-semibold text-gray-500">
+                            Scene Break (30+ minutes)
+                        </td>
+                    `;
+                    elements.tableBody.appendChild(separatorRow);
+                }
+                
+                const sceneColorClass = SCENE_COLORS[(result.sceneId - 1) % SCENE_COLORS.length];
+                const clipTypeClass = getClipTypeClass(result.primary_shot_type);
+                const isKeep = result.keep === 1;
+                
+                const row = document.createElement('tr');
+                row.className = `${sceneColorClass} table-row-hover cursor-pointer`;
+                row.dataset.index = index;
+                
+                // Determine duration display
+                const originalLength = result.video_length_seconds || 0;
+                const cutDuration = result.clip_cut_duration;
+                let durationDisplay = 'FULL';
+                if (cutDuration !== null && cutDuration > 0 && cutDuration < originalLength) {
+                    durationDisplay = formatDuration(cutDuration);
+                }
+                
+                row.innerHTML = `
+                    <td class="px-4 py-3">
+                        <div class="w-24 h-16 bg-gray-200 rounded overflow-hidden thumbnail-hover">
+                            <img 
+                                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E"
+                                data-src="/api/thumbnail-file/${encodeURIComponent(result.filename)}"
+                                alt="Thumbnail"
+                                class="w-full h-full object-cover lazy-thumbnail skeleton"
+                            />
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="font-medium text-sm text-gray-900 truncate max-w-[200px]">${result.filename}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">${formatTimestamp(result.video_timestamp)}</div>
+                    </td>
+                    <td class="px-4 py-3 max-w-md">
+                        <div class="font-semibold text-sm text-gray-800 mb-1">${result.video_description_short || 'No description'}</div>
+                        <div class="text-xs text-gray-600 line-clamp-2">${result.video_description_long || ''}</div>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-3 py-1 inline-flex text-xs font-semibold rounded-full ${clipTypeClass}">
+                            ${result.primary_shot_type || 'Unknown'}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <div class="inline-flex items-center gap-1">
+                            ${renderStars(result.rating)}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-2 py-1 text-xs font-semibold rounded ${isKeep ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${isKeep ? 'KEEP' : 'DISCARD'}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="text-sm ${cutDuration !== null && cutDuration < originalLength ? 'font-bold text-red-600' : 'text-gray-600'}">
+                            ${durationDisplay}
+                        </span>
+                    </td>
+                `;
+                
+                elements.tableBody.appendChild(row);
+            });
+            
+            // Lazy load thumbnails
+            loadVisibleThumbnails();
+        }
+        
+        // ===== THUMBNAIL LAZY LOADING =====
+        
+        let thumbnailObserver = null;
+        
+        function loadVisibleThumbnails() {
+            // Disconnect old observer
+            if (thumbnailObserver) {
+                thumbnailObserver.disconnect();
+            }
+            
+            // Create new observer
+            thumbnailObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const src = img.dataset.src;
+                        if (src && !img.src.includes('/api/')) {
+                            img.src = src;
+                            img.classList.remove('skeleton');
+                            thumbnailObserver.unobserve(img);
+                        }
+                    }
+                });
+            }, {
+                rootMargin: '100px'
+            });
+            
+            // Observe all lazy thumbnails
+            document.querySelectorAll('.lazy-thumbnail').forEach(img => {
+                thumbnailObserver.observe(img);
+            });
+        }
+        
+        // ===== MODAL =====
+        
+        function openModal(index) {
+            if (index < 0 || index >= filteredResults.length) return;
+            
+            currentIndex = index;
+            const result = filteredResults[index];
+            
+            // Set video source
+            elements.modalVideo.src = `/video/${encodeURIComponent(result.filename)}`;
+            elements.modalVideo.poster = `/api/thumbnail-file/${encodeURIComponent(result.filename)}`;
+            
+            // Set text content
+            elements.modalTitle.textContent = result.video_description_short || 'No title';
+            elements.modalFilename.textContent = result.filename;
+            elements.modalShortDesc.textContent = result.video_description_short || 'No description';
+            elements.modalLongDesc.textContent = result.video_description_long || 'No detailed description available';
+            
+            // Set metadata
+            const clipTypeClass = getClipTypeClass(result.primary_shot_type);
+            elements.modalClipType.className = `px-3 py-1 text-xs font-medium rounded-full ${clipTypeClass}`;
+            elements.modalClipType.textContent = result.primary_shot_type || 'Unknown';
+            
+            elements.modalRatingDisplay.innerHTML = renderStars(result.rating);
+            elements.modalTimestamp.textContent = formatTimestamp(result.video_timestamp);
+            elements.modalLength.textContent = formatDuration(result.video_length_seconds);
+            
             const isKeep = result.keep === 1;
-            if (isKeep) {
-                modalKeepStatus.textContent = 'Status: KEEP';
-                modalKeepStatus.className = 'px-3 py-1 text-xs font-bold rounded-full text-center bg-emerald-100 text-emerald-800';
-                toggleKeepBtn.textContent = 'Switch to DISCARD (D)';
-                toggleKeepBtn.classList.remove('bg-red-500', 'hover:bg-red-600', 'text-white');
-                toggleKeepBtn.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white');
-            } else {
-                modalKeepStatus.textContent = 'Status: DISCARD';
-                modalKeepStatus.className = 'px-3 py-1 text-xs font-bold rounded-full text-center bg-red-100 text-red-800';
-                toggleKeepBtn.textContent = 'Switch to KEEP (D)';
-                toggleKeepBtn.classList.remove('bg-green-500', 'hover:bg-green-600', 'text-white');
-                toggleKeepBtn.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white');
-            }
-        }
-
-        /**
-         * Updates the visual state of the Cut Duration controls in the modal.
-         * @param {Object} result - The current video result object.
-         * @param {string} [source='Initial'] - The source of the update (for display).
-         */
-        function updateCutDurationUI(result, source = 'load') {
+            elements.modalKeepStatus.textContent = isKeep ? 'KEEP' : 'DISCARD';
+            elements.modalKeepStatus.className = isKeep ? 'text-green-700 font-bold' : 'text-red-700 font-bold';
+            
+            const originalLength = result.video_length_seconds || 0;
             const cutDuration = result.clip_cut_duration;
-            const originalLength = result.video_length_seconds;
-            
-            let displayDuration;
-            let sourceText;
-            let inputInitialValue = '';
-
             if (cutDuration !== null && cutDuration > 0 && cutDuration < originalLength) {
-                displayDuration = formatLength(cutDuration) + 's';
-                sourceText = `(Custom Cut, from ${source})`;
-                inputInitialValue = cutDuration.toFixed(1);
-            } else if (cutDuration !== null && cutDuration >= originalLength) {
-                // Handle cases where duration was set to be >= original length (should be maxed out)
-                 displayDuration = formatLength(originalLength) + 's';
-                 sourceText = `(Full Length Used, from ${source})`;
-                 inputInitialValue = originalLength.toFixed(1); // Show max value in the input field
+                elements.modalDuration.textContent = `${formatDuration(cutDuration)} (cut)`;
             } else {
-                displayDuration = formatLength(originalLength) + 's';
-                sourceText = `(Full Length Used, from ${source})`;
-                inputInitialValue = ''; // Empty input box for full length
+                elements.modalDuration.textContent = 'FULL';
             }
             
-            modalCutDurationInfo.textContent = `Current Cut: ${displayDuration} (Original: ${formatLength(originalLength)}s)`;
-            modalCutSource.textContent = sourceText;
-            cutDurationInput.value = inputInitialValue;
-            saveDurationBtn.disabled = true; // Disable save button until input changes
+            elements.modalInTime.textContent = formatTimecode(result.in_timestamp);
+            elements.modalOutTime.textContent = formatTimecode(result.out_timestamp);
+            
+            // Tags
+            const tags = Array.isArray(result.tags) ? result.tags : [];
+            elements.modalTags.innerHTML = tags.length > 0 
+                ? tags.map(tag => `<span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">${tag}</span>`).join('')
+                : '<span class="text-xs text-gray-400">No tags</span>';
+            
+            // Scene indicators
+            elements.modalSceneIndicators.innerHTML = '';
+            if (result.isFirstInScene) {
+                elements.modalSceneIndicators.innerHTML += '<span class="px-2 py-1 text-xs font-bold rounded bg-rose-100 text-rose-700 border border-rose-400">START OF SCENE</span>';
+            }
+            if (result.isLastInScene && !result.isFirstInScene) {
+                elements.modalSceneIndicators.innerHTML += '<span class="px-2 py-1 text-xs font-bold rounded bg-cyan-100 text-cyan-700 border border-cyan-400">END OF SCENE</span>';
+            }
+            
+            // Load transcript
+            loadTranscript(result.filename);
+            
+            // Show modal
+            elements.modal.classList.remove('hidden');
+            elements.modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
         }
-
-        /**
-         * Load subtitle for the current video.
-         */
-        async function loadSubtitle(filename) {
+        
+        function closeModal() {
+            elements.modal.classList.remove('flex');
+            elements.modal.classList.add('hidden');
+            document.body.style.overflow = '';
+            elements.modalVideo.pause();
+            currentIndex = -1;
+        }
+        
+        function navigateModal(direction) {
+            if (currentIndex === -1) return;
+            
+            let newIndex = currentIndex + direction;
+            if (newIndex < 0) newIndex = filteredResults.length - 1;
+            if (newIndex >= filteredResults.length) newIndex = 0;
+            
+            openModal(newIndex);
+        }
+        
+        async function loadTranscript(filename) {
             try {
                 const response = await fetch(`/api/subtitle/${encodeURIComponent(filename)}`);
                 if (!response.ok) {
-                    // Subtitle not available
-                    subtitleSection.style.display = 'none';
-                    currentSubtitle = null;
+                    elements.modalTranscriptSection.classList.add('hidden');
                     return;
                 }
                 
                 const data = await response.json();
                 if (data.success && data.subtitle) {
-                    currentSubtitle = data.subtitle;
-                    subtitleContent.textContent = currentSubtitle;
-                    subtitleSection.style.display = 'block';
-                    // Reset to collapsed state
-                    subtitleContent.style.display = 'none';
-                    toggleSubtitleBtn.textContent = 'Show';
+                    elements.modalTranscriptContent.textContent = data.subtitle;
+                    elements.modalTranscriptSection.classList.remove('hidden');
+                    elements.modalTranscriptContent.classList.add('hidden');
+                    elements.toggleTranscriptBtn.textContent = 'Show';
                 } else {
-                    subtitleSection.style.display = 'none';
-                    currentSubtitle = null;
+                    elements.modalTranscriptSection.classList.add('hidden');
                 }
             } catch (error) {
-                console.error('Error loading subtitle:', error);
-                subtitleSection.style.display = 'none';
-                currentSubtitle = null;
+                console.error('Error loading transcript:', error);
+                elements.modalTranscriptSection.classList.add('hidden');
             }
         }
-
-        /**
-         * Toggle subtitle visibility.
-         */
-        function toggleSubtitle() {
-            if (subtitleContent.style.display === 'none') {
-                subtitleContent.style.display = 'block';
-                toggleSubtitleBtn.textContent = 'Hide';
-            } else {
-                subtitleContent.style.display = 'none';
-                toggleSubtitleBtn.textContent = 'Show';
+        
+        // ===== API =====
+        
+        async function fetchResults(showLoadingIndicator = false) {
+            if (showLoadingIndicator) {
+                showLoading();
             }
-        }
-
-        /**
-         * Loads the data for a given index from the currentResults array and updates the modal content.
-         */
-        async function displayModalForIndex(index) {
-            if (index < 0 || index >= currentResults.length) {
-                return; // Index out of bounds
-            }
-
-            const result = currentResults[index];
-            currentIndex = index; // Set global index for keyboard navigation
-            currentFilename = result.filename; // Set global filename for updates
             
-            const primaryShot = result.primary_shot_type || 'Unclassified';
-            const videoFilename = result.filename || ''; // Use result.filename directly as it's the identifier
-            
-            // 1. --- Thumbnail Setup (Use JPG file endpoint) ---
-            const videoFilename = result.filename;
-            let thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=LOADING...';
-
-            // Use the new thumbnail-file endpoint to get JPG directly
-            if (videoFilename) {
-                thumbnailSrc = `/api/thumbnail-file/${encodeURIComponent(videoFilename)}`;
-            } else {
-                thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=NO+IMG';
-            }
-
-
-            // 2. --- Modal Content Setup ---
-
-            const formattedDate = formatTimestamp(result.video_timestamp);
-            const formattedLength = formatLength(result.video_length_seconds);
-
-            modalTitle.textContent = result.video_description_short;
-            modalFilename.textContent = result.filename;
-
-            // Media setup (video/image)
-            if (videoFilename) {
-                const videoUrl = `/video/${videoFilename}`;
-                modalImage.src = thumbnailSrc;
-                modalImage.style.display = 'block';
-                // Only add the click-to-play class if there is a video
-                modalImage.classList.add('cursor-pointer', 'video-poster'); 
-                modalVideo.src = videoUrl;
-                modalVideo.poster = thumbnailSrc;
-                modalVideo.load(); 
-                modalVideo.style.display = 'none';
-                modalVideo.pause(); // Ensure it is paused on load
-                videoMessage.style.display = 'none';
-            } else {
-                modalImage.src = thumbnailSrc;
-                modalImage.style.display = 'block';
-                modalImage.classList.remove('cursor-pointer', 'video-poster');
-                modalVideo.style.display = 'none';
-                modalVideo.pause(); 
-                videoMessage.style.display = 'block';
-                videoMessage.textContent = 'Video file path is missing or the file was not found on the server.';
-            }
-
-            // Classification Metadata Setup
-            modalShortDesc.textContent = result.video_description_short; 
-            // The following line has been updated to remove height constraint
-            modalLongDesc.textContent = result.video_description_long;
-            modalLength.textContent = `Original: ${formattedLength}s`;
-            modalTimestamp.textContent = `Date: ${formattedDate}`;
-            
-            // Clip Type Styling
-            let clipClass = 'bg-gray-100 text-gray-800';
-            // Map common shot types to color styles
-            if (primaryShot.includes('Close') || primaryShot.includes('Close-up')) {
-                clipClass = 'bg-green-100 text-green-800';
-            } else if (primaryShot.includes('B-Roll') || primaryShot.includes('Scenic')) {
-                clipClass = 'bg-yellow-100 text-yellow-800';
-            } else if (primaryShot.includes('Aerial') || primaryShot.includes('Drone')) {
-                clipClass = 'bg-purple-100 text-purple-800';
-            } else if (primaryShot.includes('Wide') || primaryShot.includes('Establishing')) {
-                clipClass = 'bg-cyan-100 text-cyan-800';
-            }
-            modalClipType.className = `text-xs px-3 py-1 font-medium rounded-full ${clipClass}`;
-            modalClipType.textContent = primaryShot;
-
-            // Scene Indicator Logic
-            sceneStartIndicator.style.display = result.isFirstInScene ? 'block' : 'none';
-            sceneEndIndicator.style.display = (result.isLastInScene && !result.isFirstInScene) ? 'block' : 'none';
-            
-            // Editing Decision Logic & UI Setup
-            updateKeepStatusUI(result);
-            updateCutDurationUI(result, 'load');
-            
-            // Load subtitle for this video
-            await loadSubtitle(result.filename);
-
-
-            // 3. Show Modal if not already visible
-            if (modal.classList.contains('hidden')) {
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-                document.body.style.overflow = 'hidden';
-            }
-        }
-
-
-        /**
-         * Renders the data into the HTML table body, applying scene clustering and calculating scene boundary flags.
-         * @param {Array<Object>} results - List of classification result dictionaries (metadata only).
-         */
-        function renderTable(results) {
-            // Function to load thumbnail for a specific row
-            async function loadThumbnail(filename, imgElement) {
-                try {
-                    // Use the new thumbnail-file endpoint to get JPG directly
-                    imgElement.src = `/api/thumbnail-file/${encodeURIComponent(filename)}`;
-                    imgElement.classList.remove('animate-pulse', 'bg-gray-200');
-                } catch (error) {
-                    console.error('Error loading thumbnail:', error);
-                }
-            }
-
-            // 1. Sort results by timestamp (ASCENDING order: earliest first)
-            const sortedResults = results.sort((a, b) => {
-                return getTimeInMs(a.video_timestamp) - getTimeInMs(b.video_timestamp);
-            });
-
-            // 2. Cluster Identification and Flagging Pass
-            let currentSceneId = 0;
-            let lastTimestampMs = 0;
-            let sceneMap = []; // Stores { id: id, start: index, end: index }
-
-            sortedResults.forEach((result, index) => {
-                const currentTimestampMs = getTimeInMs(result.video_timestamp);
-                const timeDiff = currentTimestampMs - lastTimestampMs;
-
-                // Check for a scene break (time difference > threshold or it's the first clip)
-                if (timeDiff > THRESHOLD_MS || index === 0) {
-                    currentSceneId++;
-                    
-                    // Mark the end of the previous scene (unless it's the very first clip)
-                    if (index > 0) {
-                        sortedResults[index - 1].isLastInScene = true;
-                    }
-                    
-                    // Mark the current clip as the start of the new scene
-                    result.isFirstInScene = true;
-                    result.isLastInScene = false; // Default for current clip
-                    sceneMap.push({ id: currentSceneId, start: index, end: index });
-                } else {
-                    // Continuation of current scene
-                    result.isFirstInScene = false;
-                    result.isLastInScene = false;
-                    sceneMap[sceneMap.length - 1].end = index;
-                }
-
-                // Store sceneId for coloring
-                result.sceneId = currentSceneId;
-                
-                lastTimestampMs = currentTimestampMs;
-            });
-
-            // Handle the very last clip in the entire dataset, which is always the end of its scene
-            if (sortedResults.length > 0) {
-                sortedResults[sortedResults.length - 1].isLastInScene = true;
-            }
-
-            // Store the enriched results globally (Metadata only, thumbnails excluded)
-            currentResults = sortedResults;
-            tableBody.innerHTML = ''; // Clear existing rows
-
-            if (currentResults.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-12 text-gray-400 text-lg">No classification results found in the database.</td></tr>';
-                return;
-            }
-
-            // 3. Render Table Rows
-            currentResults.forEach((result, index) => {
-                
-                // Assign color class based on the scene index
-                const sceneColorClass = SCENE_COLORS[(result.sceneId - 1) % SCENE_COLORS.length];
-
-                // Add a visual separator when a new scene begins (for multi-clip scenes only)
-                if (result.isFirstInScene && index > 0) {
-                    const separatorRow = document.createElement('tr');
-                    separatorRow.innerHTML = `<td colspan="8" class="p-2 border-t-4 border-dashed border-gray-300 bg-gray-100 text-center text-xs font-semibold text-gray-500">--- Scene Break: Clips are over 30 minutes apart ---</td>`;
-                    tableBody.appendChild(separatorRow);
-                }
-
-                // --- Rest of the rendering logic ---
-                const primaryShot = result.primary_shot_type || 'Unclassified';
-                // Placeholder image for the table view since we skipped fetching the base64 data
-                const thumbnailSrc = 'https://placehold.co/56x32/cccccc/ffffff?text=THUMB';
-                
-                const formattedDate = formatTimestamp(result.video_timestamp);
-                
-                // Determine styling for Primary Shot Type
-                let clipClass = 'bg-gray-100 text-gray-800';
-                if (primaryShot.includes('Close') || primaryShot.includes('Close-up')) {
-                    clipClass = 'bg-green-100 text-green-800';
-                } else if (primaryShot.includes('B-Roll') || primaryShot.includes('Scenic')) {
-                    clipClass = 'bg-yellow-100 text-yellow-800';
-                } else if (primaryShot.includes('Aerial') || primaryShot.includes('Drone')) {
-                    clipClass = 'bg-purple-100 text-purple-800';
-                } else if (primaryShot.includes('Wide') || primaryShot.includes('Establishing')) {
-                    clipClass = 'bg-cyan-100 text-cyan-800';
-                }
-                
-                // --- NEW COLUMN LOGIC: KEEP STATUS ---
-                const isKeep = result.keep === 1;
-                const keepText = isKeep ? 'KEEP' : 'DISCARD';
-                const keepClass = isKeep ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800';
-
-                // --- NEW COLUMN LOGIC: CUT LENGTH ---
-                const originalLength = result.video_length_seconds;
-                const cutDuration = result.clip_cut_duration;
-                
-                const cutDisplay = (cutDuration === null || cutDuration >= originalLength)
-                    ? 'FULL' 
-                    : formatLength(cutDuration) + 's';
-                
-                const cutClass = cutDuration !== null && cutDuration < originalLength
-                    ? 'font-bold text-red-500' // Highlight custom cut
-                    : 'text-gray-500';
-
-                // Prepare tags HTML (tags come from DB as an array via metadata endpoint)
-                const tagsArray = Array.isArray(result.tags) ? result.tags : (result.tags ? [result.tags] : []);
-                const tagsHtml = tagsArray.length > 0 ? tagsArray.map(tag => `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 mr-1">${tag}</span>`).join(' ') : '<span class="text-xs text-gray-400">—</span>';
-
-                const row = document.createElement('tr');
-                // Apply the scene color and background class here
-                row.className = `${sceneColorClass} hover:bg-opacity-90 transition-colors duration-200 border-b border-indigo-100`;
-                
-                // HTML for the table row (now with separate thumbnail column)
-                row.innerHTML = `
-                    <!-- Thumbnail Column -->
-                    <td class="px-4 py-4 text-sm">
-                        <div class="w-24 h-16 relative cursor-pointer thumbnail-trigger" data-index="${index}">
-                            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" 
-                                 alt="Loading thumbnail..." 
-                                 class="w-full h-full object-cover rounded shadow bg-gray-200 animate-pulse">
-                        </div>
-                    </td>
-                    <!-- File Name and Timestamp -->
-                    <td class="px-4 py-4 text-sm text-gray-900">
-                        <div class="cursor-pointer thumbnail-trigger" data-index="${index}">
-                            <div class="font-medium truncate max-w-[200px]">${result.filename}</div>
-                            <div class="text-xs text-gray-400 mt-0.5" title="Video Timestamp">${formattedDate}</div>
-                        </div>
-                    </td>
-                    <!-- 2. Description cell (Responsive) - ADJUSTED FOR BOTTOM ALIGNMENT AND FULL WIDTH -->
-                    <td class="px-6 py-4 hidden sm:table-cell whitespace-normal max-w-lg">
-                        <div class="flex flex-col h-full justify-between">
-                            <!-- Short Description (Top, truncated for space) -->
-                            <div class="font-semibold text-sm text-gray-700 truncate mb-1">
-                                ${result.video_description_short}
-                            </div>
-                            <!-- Long Description (Bottom, allows full width and line wrapping) -->
-                            <div class="text-xs text-gray-500 w-full mt-auto">
-                                ${result.video_description_long}
-                            </div>
-                        </div>
-                    </td>
-                    <!-- 3. Primary Shot Type -->
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${clipClass}">
-                            ${primaryShot}
-                        </span>
-                    </td>
-                    <!-- 4. Tags -->
-                    <td class="px-4 py-4 whitespace-nowrap">
-                        ${tagsHtml}
-                    </td>
-                    <!-- 4. Rating -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center">
-                        <span class="text-sm font-medium">${result.rating ? result.rating.toFixed(1) : 'N/A'}</span>
-                    </td>
-                    <!-- 5. In Timestamp -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-mono">
-                        ${formatTimecode(result.in_timestamp)}
-                    </td>
-                    <!-- 6. Out Timestamp -->
-                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-mono">
-                        ${formatTimecode(result.out_timestamp)}
-                    </td>
-                `;
-                tableBody.appendChild(row);
-                
-                // Start loading the thumbnail for this row
-                const imgElement = row.querySelector('img');
-                loadThumbnail(result.filename, imgElement);
-            });
-            
-            // Update last fetched timestamp
-            lastUpdatedEl.textContent = `Last fetched: ${formatTimestamp(new Date().toISOString())}`;
-        }
-
-        /**
-         * Fetches data from the new lightweight API and updates the table.
-         * @param {boolean} showLoading - If true, displays a loading message.
-         */
-        async function fetchResults(showLoading = true) {
-            if (showLoading) {
-                statusEl.innerHTML = '<span class="font-semibold text-blue-500">Loading Metadata...</span>';
-            }
             try {
-                // *** Using the new lightweight metadata endpoint ***
-                const response = await fetch('/api/metadata'); 
+                const response = await fetch('/api/metadata');
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                
                 const data = await response.json();
-                renderTable(data);
-                statusEl.innerHTML = '<span class="font-semibold text-green-500">Live:</span> Fetching data every 60 seconds...';
-
+                allResults = processSceneClustering(data);
+                
+                // Update clip type filter options
+                updateClipTypeFilter();
+                
+                // Apply filters and render
+                applyFiltersAndRender();
+                
+                // Update last updated time
+                elements.lastUpdated.textContent = new Date().toLocaleString();
+                
             } catch (error) {
-                console.error("Failed to fetch classification results:", error);
-                statusEl.innerHTML = '<span class="font-semibold text-red-500">Error:</span> Could not connect to server. Run `python app.py`.';
+                console.error('Error fetching results:', error);
+                showError();
             }
         }
-
-        // Initial fetch when the page loads
-        fetchResults();
-
-        // Set up the auto-update interval (60000ms = 60 seconds)
-        const updateInterval = 60000;
-        setInterval(fetchResults, updateInterval);
         
-        // --- Event Delegation for Thumbnail Click in Table ---
-        tableBody.addEventListener('click', (e) => {
-            const trigger = e.target.closest('.thumbnail-trigger');
-            if (trigger) {
-                const index = parseInt(trigger.getAttribute('data-index'));
-                displayModalForIndex(index);
+        function updateClipTypeFilter() {
+            const types = new Set();
+            allResults.forEach(result => {
+                if (result.primary_shot_type) {
+                    types.add(result.primary_shot_type);
+                }
+            });
+            
+            const currentValue = elements.clipTypeFilter.value;
+            elements.clipTypeFilter.innerHTML = '<option value="">All Clip Types</option>';
+            
+            Array.from(types).sort().forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                if (type === currentValue) {
+                    option.selected = true;
+                }
+                elements.clipTypeFilter.appendChild(option);
+            });
+        }
+        
+        function applyFiltersAndRender() {
+            filteredResults = applyFilters(allResults);
+            filteredResults = applySorting(filteredResults);
+            updateStatistics();
+            renderTable();
+        }
+        
+        // ===== AUTO-REFRESH =====
+        
+        function setupAutoRefresh() {
+            clearInterval(refreshTimer);
+            
+            const interval = parseInt(elements.refreshInterval.value);
+            if (interval === 0 || isPaused) {
+                elements.refreshStatus.textContent = isPaused ? 'Paused' : 'Manual';
+                return;
             }
-        });
-
-        // --- Event Listener for Thumbnail Click inside Modal (Click-to-Play) ---
-        modalImage.addEventListener('click', playVideo);
+            
+            nextRefreshTime = Date.now() + (interval * 1000);
+            updateRefreshCountdown();
+            
+            refreshTimer = setInterval(() => {
+                fetchResults(false);
+                nextRefreshTime = Date.now() + (interval * 1000);
+            }, interval * 1000);
+            
+            // Update countdown every second
+            setInterval(updateRefreshCountdown, 1000);
+        }
         
-        // --- Event Listeners for Editing Controls ---
-        toggleKeepBtn.addEventListener('click', sendKeepUpdate);
-        
-        // Event listener for subtitle toggle
-        toggleSubtitleBtn.addEventListener('click', toggleSubtitle);
-
-        // Delegation for the quick set duration buttons
-        quickSetButtonsContainer.addEventListener('click', (e) => {
-            const button = e.target.closest('.quick-set-btn');
-            if (button) {
-                const duration = button.getAttribute('data-duration');
-                handleDurationUpdate(duration);
+        function updateRefreshCountdown() {
+            if (isPaused || !nextRefreshTime) {
+                elements.refreshStatus.textContent = isPaused ? 'Paused' : 'Manual';
+                return;
             }
-        });
-
-        // Event listener for the custom input field
-        cutDurationInput.addEventListener('input', () => {
-            const inputValue = cutDurationInput.value.trim();
-            // Enable save button if input is non-empty, or explicitly 0 (which resets to full), 
-            // and it's not obviously non-numeric (though parseFloat will handle this during save)
-            saveDurationBtn.disabled = inputValue === '' ? false : isNaN(parseFloat(inputValue));
+            
+            const remaining = Math.max(0, Math.floor((nextRefreshTime - Date.now()) / 1000));
+            elements.refreshStatus.textContent = `Next: ${remaining}s`;
+        }
+        
+        // ===== EVENT LISTENERS =====
+        
+        // Search with debounce
+        let searchDebounce = null;
+        elements.searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => {
+                filters.search = e.target.value.trim();
+                applyFiltersAndRender();
+            }, 300);
         });
         
-        // Event listener for the custom save button
-        saveDurationBtn.addEventListener('click', () => handleDurationUpdate());
-
-
-        // --- Keyboard Navigation Handler ---
-        document.addEventListener('keyup', (e) => {
-            // Check if the modal is currently open and if there are results to navigate
-            if (modal.classList.contains('flex') && currentResults.length > 0) {
+        // Keep status filter
+        elements.keepFilterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filterValue = btn.dataset.filter;
+                filters.keepStatus = filterValue;
                 
-                const key = e.key.toLowerCase(); // Define key here for all subsequent checks
-
-                // 1. Navigation (Left/Right)
-                if (e.key === 'ArrowRight') {
-                    e.preventDefault(); // Prevent page scroll
-                    const newIndex = (currentIndex + 1) % currentResults.length;
-                    displayModalForIndex(newIndex);
-                } else if (e.key === 'ArrowLeft') {
-                    e.preventDefault(); // Prevent page scroll
-                    const newIndex = (currentIndex - 1 + currentResults.length) % currentResults.length;
-                    displayModalForIndex(newIndex);
+                // Update button styles
+                elements.keepFilterBtns.forEach(b => {
+                    if (b === btn) {
+                        b.classList.add('bg-indigo-600', 'text-white');
+                        b.classList.remove('text-gray-700', 'hover:bg-gray-200');
+                    } else {
+                        b.classList.remove('bg-indigo-600', 'text-white');
+                        b.classList.add('text-gray-700', 'hover:bg-gray-200');
+                    }
+                });
+                
+                applyFiltersAndRender();
+            });
+        });
+        
+        // Clip type filter
+        elements.clipTypeFilter.addEventListener('change', (e) => {
+            filters.clipType = e.target.value;
+            applyFiltersAndRender();
+        });
+        
+        // Rating filter
+        elements.ratingFilter.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            filters.minRating = value;
+            elements.ratingValue.textContent = value.toFixed(1);
+            applyFiltersAndRender();
+        });
+        
+        // Clear filters
+        elements.clearFiltersBtn.addEventListener('click', () => {
+            filters = {
+                search: '',
+                keepStatus: 'all',
+                clipType: '',
+                minRating: 0.0,
+            };
+            
+            elements.searchInput.value = '';
+            elements.clipTypeFilter.value = '';
+            elements.ratingFilter.value = '0';
+            elements.ratingValue.textContent = '0.0';
+            
+            // Reset keep filter buttons
+            elements.keepFilterBtns.forEach(btn => {
+                if (btn.dataset.filter === 'all') {
+                    btn.classList.add('bg-indigo-600', 'text-white');
+                    btn.classList.remove('text-gray-700', 'hover:bg-gray-200');
+                } else {
+                    btn.classList.remove('bg-indigo-600', 'text-white');
+                    btn.classList.add('text-gray-700', 'hover:bg-gray-200');
+                }
+            });
+            
+            applyFiltersAndRender();
+        });
+        
+        // Sort
+        elements.sortSelect.addEventListener('change', (e) => {
+            const [field, direction] = e.target.value.split('-');
+            sortConfig = { field, direction };
+            applyFiltersAndRender();
+        });
+        
+        // Refresh controls
+        elements.refreshInterval.addEventListener('change', () => {
+            setupAutoRefresh();
+        });
+        
+        elements.pauseRefreshBtn.addEventListener('click', () => {
+            isPaused = !isPaused;
+            elements.pauseRefreshBtn.textContent = isPaused ? '▶' : '⏸';
+            elements.pauseRefreshBtn.title = isPaused ? 'Resume auto-refresh' : 'Pause auto-refresh';
+            setupAutoRefresh();
+        });
+        
+        // Table row clicks
+        elements.tableBody.addEventListener('click', (e) => {
+            const row = e.target.closest('tr');
+            if (row && row.dataset.index !== undefined) {
+                const index = parseInt(row.dataset.index);
+                openModal(index);
+            }
+        });
+        
+        // Transcript toggle
+        elements.toggleTranscriptBtn.addEventListener('click', () => {
+            const isHidden = elements.modalTranscriptContent.classList.contains('hidden');
+            if (isHidden) {
+                elements.modalTranscriptContent.classList.remove('hidden');
+                elements.toggleTranscriptBtn.textContent = 'Hide';
+            } else {
+                elements.modalTranscriptContent.classList.add('hidden');
+                elements.toggleTranscriptBtn.textContent = 'Show';
+            }
+        });
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (elements.modal.classList.contains('flex')) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    navigateModal(-1);
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    navigateModal(1);
                 } else if (e.key === 'Escape') {
+                    e.preventDefault();
                     closeModal();
                 }
-
-                // 2. Keep/Discard Toggle (D)
-                if (key === 'd') {
-                    e.preventDefault();
-                    sendKeepUpdate();
-                }
-
-                // 3. Quick Duration Update (Q, W, E, R, T)
-                if (durationKeyMap.hasOwnProperty(key)) {
-                    // Prevent key press from interfering with other elements
-                    e.preventDefault(); 
-                    const durationToSet = durationKeyMap[key];
-                    // Call the unified update handler with the predefined duration
-                    handleDurationUpdate(durationToSet);
-                }
             }
         });
-
+        
+        // ===== INITIALIZATION =====
+        
+        // Initial fetch
+        fetchResults(true);
+        
+        // Setup auto-refresh
+        setupAutoRefresh();
+        
     </script>
 </body>
 </html>
