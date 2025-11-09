@@ -562,7 +562,24 @@ def get_subtitle(filename):
 
 # --- Server Start ---
 if __name__ == '__main__':
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='vlog web server')
+    parser.add_argument('--port', type=int, default=5432, help='Port to run the server on (default: 5432)')
+    parser.add_argument('--host', type=str, default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    args = parser.parse_args()
+    
     # Debug mode should be disabled in production
-    # Use environment variable to control debug mode
-    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(debug=debug_mode, port=5432)
+    # Use environment variable or command line flag to control debug mode
+    debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    
+    # Run with threading enabled to handle concurrent requests
+    # This is critical for allowing API calls while Snakemake is running
+    app.run(
+        host=args.host,
+        port=args.port,
+        debug=debug_mode,
+        threaded=True  # Explicitly enable threading for concurrent request handling
+    )

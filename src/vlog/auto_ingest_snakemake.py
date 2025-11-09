@@ -311,6 +311,7 @@ class AutoIngestSnakemakeService:
                 logger.info(f"Running Snakemake command: {' '.join(cmd)}")
                 
                 # Run Snakemake with process group for proper cleanup
+                # Only hold lock when setting the process, not during execution
                 with self._snakemake_lock:
                     self._snakemake_process = subprocess.Popen(
                         cmd,
@@ -321,20 +322,24 @@ class AutoIngestSnakemakeService:
                         bufsize=1,
                         preexec_fn=os.setpgrp  # Create new process group
                     )
-                    
-                    # Stream output
-                    if self._snakemake_process.stdout:
-                        for line in self._snakemake_process.stdout:
-                            logger.info(f"Snakemake: {line.rstrip()}")
-                    
-                    # Wait for completion
-                    returncode = self._snakemake_process.wait()
-                    
-                    if returncode == 0:
-                        logger.info("Snakemake workflow completed successfully")
-                    else:
-                        logger.error(f"Snakemake workflow failed with exit code {returncode}")
-                    
+                    process = self._snakemake_process  # Keep reference for use outside lock
+                
+                # Stream output and wait for completion outside the lock
+                # This allows status checks and other API calls to work while Snakemake runs
+                if process.stdout:
+                    for line in process.stdout:
+                        logger.info(f"Snakemake: {line.rstrip()}")
+                
+                # Wait for completion
+                returncode = process.wait()
+                
+                if returncode == 0:
+                    logger.info("Snakemake workflow completed successfully")
+                else:
+                    logger.error(f"Snakemake workflow failed with exit code {returncode}")
+                
+                # Clear the process reference
+                with self._snakemake_lock:
                     self._snakemake_process = None
                 
             finally:
