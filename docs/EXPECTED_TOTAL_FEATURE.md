@@ -45,34 +45,54 @@ VIDEO_STEMS = discover_preview_videos()
 
 ## API Response Format
 
-The `/status` endpoint now returns `expected_total` for each rule (when available):
+The `/status` endpoint now returns `expected_total` and `already_satisfied` for each rule (when available):
 
 ```json
 {
-  "total_jobs": 10,
-  "completed_jobs": 3,
+  "total_jobs": 50,
+  "completed_jobs": 30,
   "failed_jobs": 0,
-  "running_jobs": 2,
-  "pending_jobs": 5,
+  "running_jobs": 20,
+  "pending_jobs": 0,
   "rules": {
     "transcribe": {
-      "total": 10,
-      "pending": 5,
-      "running": 2,
-      "completed": 3,
+      "total": 50,
+      "pending": 0,
+      "running": 20,
+      "completed": 30,
       "failed": 0,
-      "expected_total": 300
-    },
-    "describe": {
-      "total": 5,
-      "pending": 3,
-      "running": 1,
-      "completed": 1,
-      "failed": 0,
-      "expected_total": 250
+      "expected_total": 300,
+      "already_satisfied": 250
     }
   }
 }
+```
+
+### Field Definitions
+
+- **`total`**: Number of jobs Snakemake created/will create for this rule
+- **`expected_total`**: Total number of input files discovered (e.g., all video stems)
+- **`already_satisfied`**: Number of outputs that already exist and don't need to be processed
+  - Calculated as: `already_satisfied = expected_total - total`
+  - Only appears when `expected_total` is set and `already_satisfied > 0`
+
+### Calculating Overall Progress
+
+To show complete progress including already-done work:
+
+```python
+# Get status from API
+rule_status = status["rules"]["transcribe"]
+
+# Calculate total completed (including pre-existing outputs)
+total_done = rule_status["completed"] + rule_status.get("already_satisfied", 0)
+expected = rule_status["expected_total"]
+
+# Calculate percentage
+percentage = (total_done / expected) * 100
+
+print(f"Progress: {total_done}/{expected} ({percentage:.1f}%)")
+# Example output: "Progress: 280/300 (93.3%)"
 ```
 
 ## Implementation Details

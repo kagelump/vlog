@@ -163,6 +163,18 @@ class WorkflowStatus:
                         "expected_total": expected_total
                     }
             
+            # For rules with expected_total, calculate already_satisfied count
+            # This is the number of jobs that don't need to run because output exists
+            for rule, rule_status in status["rules"].items():
+                if "expected_total" in rule_status:
+                    expected = rule_status["expected_total"]
+                    total_jobs = rule_status["total"]
+                    # already_satisfied = expected outputs - jobs that will/did run
+                    # Note: This assumes Snakemake only creates jobs for outputs that need to be (re)made
+                    already_satisfied = expected - total_jobs
+                    if already_satisfied > 0:
+                        rule_status["already_satisfied"] = already_satisfied
+            
             return status
     
     def reset(self):
@@ -269,6 +281,21 @@ class StatusLogHandler(LogHandlerBase):
                 if self._debug:
                     import sys
                     print(f"[status-logger] SET_EXPECTED_TOTAL: rule={rule}, expected_total={expected_total}", file=sys.stderr, flush=True)
+            return
+        
+        # Handle RUN_INFO event to capture total jobs that will be run
+        # This tells us how many jobs Snakemake plans to execute (excludes already-satisfied outputs)
+        if event == LogEvent.RUN_INFO:
+            if self._debug:
+                import sys
+                print(f"[status-logger] RUN_INFO event received: {record.__dict__}", file=sys.stderr, flush=True)
+            return
+        
+        # Handle PROGRESS event which may contain information about done/todo jobs
+        if event == LogEvent.PROGRESS:
+            if self._debug:
+                import sys
+                print(f"[status-logger] PROGRESS event received: {record.__dict__}", file=sys.stderr, flush=True)
             return
         
         if event == LogEvent.JOB_INFO:

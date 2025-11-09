@@ -143,6 +143,43 @@ class TestWorkflowStatus(unittest.TestCase):
         self.assertIn("transcribe", status["rules"])
         self.assertEqual(status["rules"]["transcribe"]["expected_total"], 200)
         self.assertEqual(status["rules"]["transcribe"]["total"], 0)
+    
+    def test_already_satisfied_calculation(self):
+        """Test that already_satisfied is calculated correctly."""
+        # Set expected total of 100
+        self.status.set_expected_total("transcribe", 100)
+        
+        # Add only 30 jobs (meaning 70 are already satisfied)
+        for i in range(30):
+            self.status.add_job(i, "transcribe")
+        
+        status = self.status.get_status()
+        
+        # Should calculate already_satisfied = 100 - 30 = 70
+        self.assertEqual(status["rules"]["transcribe"]["expected_total"], 100)
+        self.assertEqual(status["rules"]["transcribe"]["total"], 30)
+        self.assertEqual(status["rules"]["transcribe"]["already_satisfied"], 70)
+    
+    def test_already_satisfied_not_shown_when_zero(self):
+        """Test that already_satisfied is not shown when it would be zero or negative."""
+        # Set expected total of 50
+        self.status.set_expected_total("transcribe", 50)
+        
+        # Add exactly 50 jobs (none already satisfied)
+        for i in range(50):
+            self.status.add_job(i, "transcribe")
+        
+        status = self.status.get_status()
+        
+        # already_satisfied should not appear (it's 0)
+        self.assertNotIn("already_satisfied", status["rules"]["transcribe"])
+        
+        # Add one more job (total exceeds expected - can happen with re-runs)
+        self.status.add_job(50, "transcribe")
+        status = self.status.get_status()
+        
+        # already_satisfied should still not appear (it would be negative)
+        self.assertNotIn("already_satisfied", status["rules"]["transcribe"])
 
 
 class TestStatusLogHandler(unittest.TestCase):
