@@ -108,6 +108,39 @@ class TestWorkflowStatus(unittest.TestCase):
         
         self.assertEqual(status["total_jobs"], 0)
         self.assertEqual(len(status["rules"]), 0)
+    
+    def test_set_expected_total(self):
+        """Test setting expected total for a rule."""
+        self.status.set_expected_total("transcribe", 100)
+        self.status.add_job(1, "transcribe")
+        
+        status = self.status.get_status()
+        
+        self.assertEqual(status["rules"]["transcribe"]["expected_total"], 100)
+        self.assertEqual(status["rules"]["transcribe"]["total"], 1)
+    
+    def test_expected_total_multiple_rules(self):
+        """Test expected totals for multiple rules."""
+        self.status.set_expected_total("transcribe", 50)
+        self.status.set_expected_total("describe", 75)
+        
+        self.status.add_job(1, "transcribe")
+        self.status.add_job(2, "describe")
+        
+        status = self.status.get_status()
+        
+        self.assertEqual(status["rules"]["transcribe"]["expected_total"], 50)
+        self.assertEqual(status["rules"]["describe"]["expected_total"], 75)
+    
+    def test_expected_total_without_jobs(self):
+        """Test that expected_total can be set even without jobs yet."""
+        self.status.set_expected_total("transcribe", 200)
+        
+        status = self.status.get_status()
+        
+        # Should not appear in rules if no jobs registered yet
+        # (this is expected behavior - expected_total is only shown for rules with jobs)
+        self.assertNotIn("transcribe", status["rules"])
 
 
 class TestStatusLogHandler(unittest.TestCase):
@@ -117,8 +150,8 @@ class TestStatusLogHandler(unittest.TestCase):
         """Set up test case."""
         # Reset global status before each test
         reset_workflow_status()
-        # Disable starting the HTTP server in tests to avoid port conflicts
-        self.settings = StatusLogHandlerSettings(port=5557, start_server=False)  # Use different port for tests
+        # Use different port for tests to avoid conflicts
+        self.settings = StatusLogHandlerSettings(port=5557)
         self.common_settings = MockOutputSettings()
 
         # Note: We won't actually start the API server in tests to avoid port conflicts
@@ -223,6 +256,42 @@ class TestStatusLogHandler(unittest.TestCase):
         status = get_workflow_status()
         self.assertEqual(status["rules"]["transcribe"]["completed"], 1)
         self.assertEqual(status["completed_jobs"], 1)
+    
+    def test_emit_set_expected_total(self):
+        """Test handling SET_EXPECTED_TOTAL custom event."""
+        # Disable API server
+        StatusLogHandler.__post_init__ = lambda self: None
+        
+        handler = StatusLogHandler(
+            common_settings=self.common_settings,
+            settings=self.settings
+        )
+        
+        # Emit SET_EXPECTED_TOTAL event
+        record = logging.LogRecord(
+            name="snakemake", level=logging.INFO,
+            pathname="workflow.py", lineno=1,
+            msg="Setting expected total", args=(), exc_info=None
+        )
+        record.event = "SET_EXPECTED_TOTAL"
+        record.rule = "transcribe"
+        record.expected_total = 100
+        handler.emit(record)
+        
+        # Add a job to see the expected_total in the status
+        record = logging.LogRecord(
+            name="snakemake", level=logging.INFO,
+            pathname="workflow.py", lineno=1,
+            msg="Job info", args=(), exc_info=None
+        )
+        record.event = LogEvent.JOB_INFO
+        record.jobid = 1
+        record.rule = "transcribe"
+        handler.emit(record)
+        
+        status = get_workflow_status()
+        self.assertEqual(status["rules"]["transcribe"]["expected_total"], 100)
+        self.assertEqual(status["rules"]["transcribe"]["total"], 1)
 
 
 class TestAPIServer(unittest.TestCase):

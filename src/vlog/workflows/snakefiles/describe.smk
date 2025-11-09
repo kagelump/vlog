@@ -25,6 +25,9 @@ from pathlib import Path
 import glob
 import os
 
+# Import helper for communicating with status logger
+from vlog.snakemake_logger_plugin.helpers import set_expected_total
+
 
 # Configuration is inherited from the main Snakefile that includes this file
 # DO NOT use configfile directive here - it would reload config and lose command-line overrides
@@ -47,7 +50,10 @@ DAEMON_SIGNAL_FILE = config.get("daemon_signal_file", "status/daemon_running.sig
 
 # If there are cleaned subtitle files, it is ready for this stage.
 def discover_videos_with_subtitles():
-    return glob_wildcards(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt").stem
+    stems = glob_wildcards(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt").stem
+    # Report expected total to status logger
+    set_expected_total("describe", len(stems))
+    return stems
 
 
 rule describe:

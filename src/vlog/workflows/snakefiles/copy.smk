@@ -17,6 +17,9 @@ import json
 import subprocess
 from pathlib import Path
 
+# Import helper for communicating with status logger
+from vlog.snakemake_logger_plugin.helpers import set_expected_total
+
 
 # Load configuration
 configfile: "config.yaml"
@@ -28,6 +31,7 @@ MAIN_FOLDER = config.get("main_folder", "videos/main")
 PREVIEW_FOLDER = config.get("preview_folder", "videos/preview")
 VIDEO_EXTENSIONS = config.get("video_extensions", ["mp4", "MP4", "mov", "MOV"])
 PREVIEW_EXT = config.get("preview_extension", "mp4")
+PREVIEW_SUFFIX = config.get("preview_suffix", "_preview")
 
 # Preview settings
 PREVIEW_SETTINGS = config.get("preview_settings", {})
@@ -47,7 +51,13 @@ def discover_videos():
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         videos_data = json.loads(result.stdout)
-        return videos_data.get("videos", [])
+        videos = videos_data.get("videos", [])
+        
+        # Report expected total to status logger
+        set_expected_total("copy_main", len(videos))
+        set_expected_total("copy_or_create_preview", len(videos))
+        
+        return videos
     except subprocess.CalledProcessError as e:
         print(f"Error discovering videos: {e.stderr}")
         return []

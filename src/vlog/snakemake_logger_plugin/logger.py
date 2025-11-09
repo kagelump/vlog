@@ -41,6 +41,8 @@ class WorkflowStatus:
         self._jobs: Dict[str, Dict[str, Set[str]]] = {}
         # job_id -> (rule_name, status)
         self._job_map: Dict[int, tuple[str, str]] = {}
+        # Expected total inputs per rule (e.g., number of stems discovered)
+        self._expected_totals: Dict[str, int] = {}
         # Total counts
         self._total_jobs = 0
         self._completed_jobs = 0
@@ -52,6 +54,11 @@ class WorkflowStatus:
             return int(job_id)
         except Exception:
             return job_id
+    
+    def set_expected_total(self, rule: str, expected_total: int):
+        """Set the expected total number of inputs for a rule."""
+        with self._lock:
+            self._expected_totals[rule] = expected_total
     
     def add_job(self, job_id: int, rule: str):
         """Register a new job."""
@@ -131,13 +138,17 @@ class WorkflowStatus:
             
             for rule, jobs in self._jobs.items():
                 total = len(jobs["pending"]) + len(jobs["running"]) + len(jobs["completed"]) + len(jobs["failed"])
-                status["rules"][rule] = {
+                rule_status = {
                     "total": total,
                     "pending": len(jobs["pending"]),
                     "running": len(jobs["running"]),
                     "completed": len(jobs["completed"]),
                     "failed": len(jobs["failed"])
                 }
+                # Add expected_total if available for this rule
+                if rule in self._expected_totals:
+                    rule_status["expected_total"] = self._expected_totals[rule]
+                status["rules"][rule] = rule_status
             
             return status
     
@@ -146,6 +157,7 @@ class WorkflowStatus:
         with self._lock:
             self._jobs.clear()
             self._job_map.clear()
+            self._expected_totals.clear()
             self._total_jobs = 0
             self._completed_jobs = 0
             self._failed_jobs = 0
@@ -233,6 +245,18 @@ class StatusLogHandler(LogHandlerBase):
                 print("[status-logger-debug]", info, file=sys.stderr, flush=True)
             except Exception:
                 pass
+        
+        # Handle custom event for setting expected totals
+        # Stages can emit this by logging with extra={'event': 'SET_EXPECTED_TOTAL', 'rule': 'rule_name', 'expected_total': count}
+        if event == "SET_EXPECTED_TOTAL":
+            rule = record.__dict__.get("rule")
+            expected_total = record.__dict__.get("expected_total")
+            if rule and expected_total is not None:
+                _workflow_status.set_expected_total(rule, int(expected_total))
+                if self._debug:
+                    import sys
+                    print(f"[status-logger] SET_EXPECTED_TOTAL: rule={rule}, expected_total={expected_total}", file=sys.stderr, flush=True)
+            return
         
         if event == LogEvent.JOB_INFO:
             # New job registered and selected for execution

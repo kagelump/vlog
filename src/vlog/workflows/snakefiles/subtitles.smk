@@ -15,6 +15,9 @@ import glob
 from pathlib import Path
 import logging
 
+# Import helper for communicating with status logger
+from vlog.snakemake_logger_plugin.helpers import set_expected_total
+
 
 # Ensure parent folder (src/vlog/workflows) is on sys.path so local modules can be imported
 # Path(__file__).parents[0] -> snakefiles, parents[1] -> workflows
@@ -48,6 +51,11 @@ def discover_preview_videos():
         logger.debug("Found %d preview files: %s", len(video_files), video_files)
         stems = [Path(f).stem for f in video_files]
         logger.debug("Derived stems: %s", stems)
+        
+        # Report expected total to status logger
+        set_expected_total("transcribe", len(stems))
+        set_expected_total("clean_subtitles", len(stems))
+        
         return stems
     except Exception as e:
         # Log the full exception stack at debug level so callers can enable debug to investigate
