@@ -137,7 +137,10 @@ class AutoIngestSnakemakeService:
             
             self.is_running = True
             logger.info(f"Auto-ingest service started, monitoring: {self.watch_directory}")
-            logger.info("Note: Existing files will be discovered and processed by Snakemake")
+            logger.info("Triggering initial Snakemake run to discover and process existing files...")
+            
+            # Trigger initial Snakemake run to process any existing files
+            self._maybe_start_processing()
             
             return True
         except Exception as e:
@@ -217,19 +220,37 @@ class AutoIngestSnakemakeService:
         Returns:
             Dictionary with progress information from the logger plugin.
         """
+        # Check if Snakemake is actually running
+        with self._snakemake_lock:
+            is_processing = self._snakemake_process is not None and self._snakemake_process.poll() is None
+        
+        if not is_processing:
+            return {
+                'available': False,
+                'message': 'No workflow currently running. Snakemake will start when new files are detected or when manually triggered.',
+                'is_processing': False
+            }
+        
         try:
             response = requests.get(f"http://127.0.0.1:{self.logger_port}/status", timeout=2)
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                data['available'] = True
+                data['is_processing'] = True
+                return data
             else:
                 return {
                     'error': f'Logger API returned status {response.status_code}',
-                    'available': False
+                    'available': False,
+                    'is_processing': True,
+                    'http_status': response.status_code
                 }
         except requests.RequestException as e:
             return {
                 'error': f'Failed to connect to logger API: {e}',
-                'available': False
+                'available': False,
+                'is_processing': True,
+                'message': 'Snakemake is running but logger API is not responding. This may indicate a configuration issue.'
             }
     
     def _trigger_snakemake(self, file_path: str) -> None:
@@ -272,7 +293,7 @@ class AutoIngestSnakemakeService:
             
             try:
                 # Build Snakemake command
-                snakefile = PROJECT_ROOT / 'src' / 'ingest_pipeline' / 'Snakefile'
+                snakefile = PROJECT_ROOT / 'src' / 'vlog' / 'workflows' /  'Snakefile'
                 
                 cmd = [
                     'snakemake',
@@ -281,6 +302,8 @@ class AutoIngestSnakemakeService:
                     f'--config',
                     f'preview_folder={self.preview_folder}',
                     '--logger', 'vlog',
+                    f'--logger-vlog-port', str(self.logger_port),
+                    f'--logger-vlog-host', '127.0.0.1',
                     f'--cores={self.cores}',
                     f'--resources', f'mem_gb={self.resources_mem_gb}'
                 ]

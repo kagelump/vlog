@@ -204,11 +204,25 @@ def get_auto_ingest_snakemake_progress():
     if auto_ingest_snakemake_service is None:
         return jsonify({
             'available': False,
-            'error': 'Service not initialized'
+            'error': 'Auto-ingest service not initialized'
         }), 503
     
     progress = auto_ingest_snakemake_service.get_progress()
-    return jsonify(progress)
+    
+    # Determine appropriate HTTP status code
+    if progress.get('available'):
+        # Progress data available - return 200 OK
+        return jsonify(progress), 200
+    elif progress.get('is_processing') == False:
+        # No workflow running (normal state) - return 200 OK with message
+        return jsonify(progress), 200
+    elif 'error' in progress:
+        # Error condition - return 503 Service Unavailable
+        http_status = progress.get('http_status', 503)
+        return jsonify(progress), http_status
+    else:
+        # Unknown state - return 200 OK with data
+        return jsonify(progress), 200
 
 
 @app.route('/api/auto-ingest-snakemake/start', methods=['POST'])

@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLog Workflow Launcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .console-output {
+            font-family: 'Courier New', monospace;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .console-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        .console-output::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+            border-radius: 4px;
+        }
+        .console-output::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-idle {
+            background-color: #6b7280;
+        }
+        .status-running {
+            background-color: #10b981;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        /* Script launcher removed in this build; CSS for script cards omitted */
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <div class="container mx-auto p-4 sm:p-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-indigo-700 mb-2">
+                VLog Workflow Launcher
+            </h1>
+            <p class="text-gray-600 text-lg">
+                Run video editing ingestion scripts with point-and-click simplicity
+            </p>
+        </header>
+
+        <!-- Status Bar -->
+        <div class="bg-white shadow-lg rounded-xl p-4 mb-6 flex items-center justify-between">
+            <div class="flex items-center">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span class="font-semibold text-gray-700 mr-4">Status:</span>
+                <span id="status-text" class="text-gray-600">Idle</span>
+            </div>
+            <div class="flex items-center text-sm text-gray-500">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                </svg>
+                <span id="working-dir" class="truncate max-w-md">Loading...</span>
+            </div>
+        </div>
+
+        <!-- Working Directory Configuration -->
+        <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Working Directory</h2>
+            <div class="flex gap-2">
+                <input 
+                    type="text" 
+                    id="working-dir-input" 
+                    placeholder="/path/to/video/directory"
+                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                <button 
+                    id="browse-dir-btn"
+                    class="px-6 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition">
+                    Browse...
+                </button>
+                <button 
+                    id="set-working-dir-btn"
+                    class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition">
+                    Set Directory
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 mt-2">
+                Set the directory where your video files are located. Scripts will run in this directory.
+            </p>
+        </div>
+
+        <!-- Script Configuration -->
+        <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Configuration</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Model</label>
+                    <input 
+                        type="text" 
+                        id="model-input" 
+                        value="mlx-community/Qwen3-VL-8B-Instruct-4bit"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">FPS (Frames per second)</label>
+                    <input 
+                        type="number" 
+                        id="fps-input" 
+                        value="1.0"
+                        step="0.1"
+                        min="0.1"
+                        max="30"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto-Ingest Snakemake Control -->
+        <div class="bg-gradient-to-r from-indigo-50 to-purple-50 shadow-lg rounded-xl p-6 mb-6 border-2 border-indigo-200">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">Auto-Ingest</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="auto-ingest-sm-status-text" class="text-sm font-medium text-gray-600">Status: Off</span>
+                    <button 
+                        id="auto-ingest-sm-toggle-btn"
+                        class="px-6 py-2 bg-gray-400 text-white font-semibold rounded-lg hover:bg-gray-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span id="auto-ingest-sm-btn-text">Start Auto-Ingest</span>
+                    </button>
+                </div>
+            </div>
+            <p class="text-sm text-gray-700 mb-4">
+                <strong>Full Snakemake pipeline:</strong> Monitors the working directory for new video files and automatically runs the complete ingestion pipeline 
+                (copy → transcribe → clean subtitles → describe) with real-time progress tracking.
+            </p>
+            
+            <!-- Configuration Options -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Preview Folder (Optional)</label>
+                    <input 
+                        type="text" 
+                        id="preview-folder-input" 
+                        placeholder="Leave empty to use working directory"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                    <p class="text-xs text-gray-500 mt-1">Separate folder for preview files. Defaults to working directory.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Cores</label>
+                    <input 
+                        type="number" 
+                        id="cores-input" 
+                        value="8"
+                        min="1"
+                        max="32"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Memory (GB)</label>
+                    <input 
+                        type="number" 
+                        id="memory-input" 
+                        value="12"
+                        min="1"
+                        max="128"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                </div>
+            </div>
+            
+            <div id="auto-ingest-sm-info" class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 hidden">
+                <strong>Currently monitoring:</strong> <span id="auto-ingest-sm-watch-dir"></span><br>
+                <strong>Preview folder:</strong> <span id="auto-ingest-sm-preview-folder"></span>
+            </div>
+            
+            <!-- Progress Display -->
+            <div id="snakemake-progress" class="hidden mt-4 p-4 bg-white rounded-lg border border-indigo-200">
+                <h3 class="text-lg font-bold text-gray-800 mb-3">Pipeline Progress</h3>
+                <div id="progress-stages" class="space-y-2">
+                    <!-- Progress bars will be inserted here -->
+                </div>
+                <div class="mt-3 text-sm text-gray-600">
+                    <span id="progress-summary"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Script launcher removed; use Auto-Ingest and CLI scripts in the repo -->
+
+        <!-- Quick Links -->
+        <div class="mt-6 text-center">
+            <a href="/results" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold">
+                View Classification Results →
+            </a>
+        </div>
+    </div>
+
+    <!-- Directory Browser Modal -->
+    <div id="directory-browser-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-gray-800">Browse Directory</h2>
+                    <button id="close-browser-btn" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="mt-3 flex items-center text-sm text-gray-600">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                    </svg>
+                    <span id="current-path-display" class="font-mono text-xs break-all"></span>
+                </div>
+            </div>
+            
+            <!-- Directory Contents -->
+            <div class="flex-1 overflow-y-auto p-6">
+                <div id="directory-items" class="space-y-2">
+                    <!-- Directory items will be loaded here -->
+                </div>
+                <div id="browser-loading" class="hidden text-center py-8 text-gray-500">
+                    Loading...
+                </div>
+                <div id="browser-error" class="hidden text-center py-8 text-red-500">
+                    <!-- Error message will be shown here -->
+                </div>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="p-6 border-t border-gray-200 flex justify-between">
+                <button id="go-up-btn" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    ↑ Go Up
+                </button>
+                <div class="flex gap-2">
+                    <button id="cancel-browser-btn" class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition">
+                        Cancel
+                    </button>
+                    <button id="select-dir-btn" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                        Select This Directory
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let lastTimestamp = 0;
+        let isRunning = false;
+        let pollInterval = null;
+
+        // DOM elements
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const workingDirDisplay = document.getElementById('working-dir');
+        const workingDirInput = document.getElementById('working-dir-input');
+        const setWorkingDirBtn = document.getElementById('set-working-dir-btn');
+        const modelInput = document.getElementById('model-input');
+        const fpsInput = document.getElementById('fps-input');
+    // Script-runner UI removed: related DOM elements are not used
+        
+        // Auto-ingest Snakemake elements
+        const autoIngestSmToggleBtn = document.getElementById('auto-ingest-sm-toggle-btn');
+        const autoIngestSmBtnText = document.getElementById('auto-ingest-sm-btn-text');
+        const autoIngestSmStatusText = document.getElementById('auto-ingest-sm-status-text');
+        const autoIngestSmInfo = document.getElementById('auto-ingest-sm-info');
+        const autoIngestSmWatchDir = document.getElementById('auto-ingest-sm-watch-dir');
+        const autoIngestSmPreviewFolder = document.getElementById('auto-ingest-sm-preview-folder');
+        const previewFolderInput = document.getElementById('preview-folder-input');
+        const coresInput = document.getElementById('cores-input');
+        const memoryInput = document.getElementById('memory-input');
+        const snakemakeProgress = document.getElementById('snakemake-progress');
+        const progressStages = document.getElementById('progress-stages');
+        const progressSummary = document.getElementById('progress-summary');
+
+        // LocalStorage key for working directory
+        const WORKING_DIR_STORAGE_KEY = 'vlog_working_directory';
+
+        // Save working directory to localStorage
+        function saveWorkingDirToStorage(workingDir) {
+            try {
+                localStorage.setItem(WORKING_DIR_STORAGE_KEY, workingDir);
+            } catch (e) {
+                console.warn('Failed to save working directory to localStorage:', e);
+            }
+        }
+
+        // Load working directory from localStorage
+        function loadWorkingDirFromStorage() {
+            try {
+                return localStorage.getItem(WORKING_DIR_STORAGE_KEY);
+            } catch (e) {
+                console.warn('Failed to load working directory from localStorage:', e);
+                return null;
+            }
+        }
+
+        // Update status display
+        function updateStatus(status) {
+            isRunning = status.is_running;
+            
+            if (isRunning) {
+                statusIndicator.className = 'status-indicator status-running';
+                statusText.textContent = `Running: ${status.current_script}`;
+                stopScriptBtn.disabled = false;
+            } else {
+                statusIndicator.className = 'status-indicator status-idle';
+                statusText.textContent = 'Idle';
+                stopScriptBtn.disabled = true;
+            }
+            
+            workingDirDisplay.textContent = status.working_directory;
+            // Only update the input if the user is not actively editing it.
+            // This prevents the periodic status poll from clobbering user edits.
+            try {
+                if (document.activeElement !== workingDirInput) {
+                    workingDirInput.value = status.working_directory;
+                }
+            } catch (e) {
+                // In very old browsers document.activeElement may behave unexpectedly;
+                // fall back to assigning the value to avoid breaking the UI.
+                workingDirInput.value = status.working_directory;
+            }
+            
+            // No script-runner; just update working directory display
+        }
+
+        // Fetch and display basic project info (working directory, version)
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/project-info');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const info = await response.json();
+                updateStatus(info);
+            } catch (error) {
+                console.error('Failed to fetch project info:', error);
+            }
+        }
+
+        // Set working directory
+        async function setWorkingDirectory() {
+            const workingDir = workingDirInput.value.trim();
+            
+            if (!workingDir) {
+                alert('Please enter a working directory');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/set-working-dir', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ working_dir: workingDir })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    consoleOutput.textContent += `\n[INFO] Working directory set to: ${workingDir}\n\n`;
+                    // Save to localStorage
+                    saveWorkingDirToStorage(workingDir);
+                    fetchStatus();
+                } else {
+                    alert(`Failed to set working directory: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('Failed to set working directory:', error);
+                alert('Failed to set working directory. See console for details.');
+            }
+        }
+
+        // (console removed) helper stub
+        function clearConsole() {
+            lastTimestamp = 0;
+        }
+        
+        // (console removed) helper stub
+        function addConsoleMessage(message) {
+            console.log(message);
+        }
+        
+        // (script runner removed) helper stubs
+        const consoleOutput = { textContent: "" };
+        const clearConsoleBtn = { addEventListener: () => {} };
+        const stopScriptBtn = { addEventListener: () => {}, disabled: false };
+        
+        function loadScripts() {
+            return Promise.resolve();
+        }
+        
+        function fetchOutput() {
+            // No-op for removed script runner
+        }
+        
+        function stopScript() {
+            // No-op for removed script runner
+        }
+
+        // Auto-ingest Snakemake functions
+        async function fetchAutoIngestSnakemakeStatus() {
+            try {
+                const response = await fetch('/api/auto-ingest-snakemake/status');
+                if (!response.ok) {
+                    if (response.status === 503) {
+                        autoIngestSmToggleBtn.disabled = true;
+                        autoIngestSmStatusText.textContent = 'Status: Unavailable';
+                        autoIngestSmBtnText.textContent = 'Not Available';
+                        return;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const status = await response.json();
+                updateAutoIngestSnakemakeUI(status);
+            } catch (error) {
+                console.error('Failed to fetch auto-ingest Snakemake status:', error);
+            }
+        }
+
+        function updateAutoIngestSnakemakeUI(status) {
+            if (!status.available) {
+                autoIngestSmToggleBtn.disabled = true;
+                autoIngestSmStatusText.textContent = 'Status: Unavailable';
+                autoIngestSmBtnText.textContent = 'Not Available';
+                return;
+            }
+
+            if (status.is_running) {
+                autoIngestSmStatusText.textContent = 'Status: Running';
+                autoIngestSmStatusText.className = 'text-sm font-medium text-green-600';
+                autoIngestSmBtnText.textContent = 'Stop Auto-Ingest';
+                autoIngestSmToggleBtn.className = 'px-6 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition';
+                autoIngestSmInfo.classList.remove('hidden');
+                autoIngestSmWatchDir.textContent = status.watch_directory || 'Unknown';
+                autoIngestSmPreviewFolder.textContent = status.preview_folder || 'Same as watch directory';
+                
+                // Show progress if processing
+                if (status.is_processing) {
+                    fetchSnakemakeProgress();
+                }
+            } else {
+                autoIngestSmStatusText.textContent = 'Status: Off';
+                autoIngestSmStatusText.className = 'text-sm font-medium text-gray-600';
+                autoIngestSmBtnText.textContent = 'Start Auto-Ingest';
+                autoIngestSmToggleBtn.className = 'px-6 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition';
+                autoIngestSmInfo.classList.add('hidden');
+                snakemakeProgress.classList.add('hidden');
+            }
+        }
+
+        async function fetchSnakemakeProgress() {
+            try {
+                const response = await fetch('/api/auto-ingest-snakemake/progress');
+                const progress = await response.json();
+                
+                // Handle different states
+                if (!response.ok) {
+                    // HTTP error (503, 500, etc.)
+                    showProgressError(progress.error || `Server error: ${response.status}`);
+                    return;
+                }
+                
+                if (progress.available === false) {
+                    // No progress available - could be normal (no workflow running) or error
+                    if (progress.error) {
+                        showProgressError(progress.error);
+                    } else if (progress.message) {
+                        showProgressMessage(progress.message, 'info');
+                    } else {
+                        // Hide progress display when no workflow running
+                        snakemakeProgress.classList.add('hidden');
+                    }
+                    return;
+                }
+                
+                updateProgressDisplay(progress);
+            } catch (error) {
+                console.error('Failed to fetch Snakemake progress:', error);
+                showProgressError('Failed to fetch progress: ' + error.message);
+            }
+        }
+
+        function showProgressError(message) {
+            snakemakeProgress.classList.remove('hidden');
+            progressStages.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex items-start">
+                        <svg class="w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-semibold text-red-800">Progress Monitoring Error</h4>
+                            <p class="text-sm text-red-700 mt-1">${message}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            progressSummary.innerHTML = '';
+        }
+
+        function showProgressMessage(message, type = 'info') {
+            snakemakeProgress.classList.remove('hidden');
+            const colors = {
+                'info': { bg: 'blue-50', border: 'blue-200', text: 'blue-700', icon: 'blue-500' },
+                'warning': { bg: 'yellow-50', border: 'yellow-200', text: 'yellow-700', icon: 'yellow-500' },
+                'success': { bg: 'green-50', border: 'green-200', text: 'green-700', icon: 'green-500' }
+            };
+            const c = colors[type] || colors['info'];
+            
+            progressStages.innerHTML = `
+                <div class="bg-${c.bg} border border-${c.border} rounded-lg p-4">
+                    <div class="flex items-start">
+                        <svg class="w-5 h-5 text-${c.icon} mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                        </svg>
+                        <p class="text-sm text-${c.text}">${message}</p>
+                    </div>
+                </div>
+            `;
+            progressSummary.innerHTML = '';
+        }
+
+        function updateProgressDisplay(progress) {
+            if (!progress.rules || Object.keys(progress.rules).length === 0) {
+                snakemakeProgress.classList.add('hidden');
+                return;
+            }
+            
+            snakemakeProgress.classList.remove('hidden');
+            
+            // Clear previous progress
+            progressStages.innerHTML = '';
+            
+            // Create progress bars for each rule
+            const rules = progress.rules;
+            for (const [ruleName, ruleStats] of Object.entries(rules)) {
+                const total = ruleStats.total || 0;
+                const completed = ruleStats.completed || 0;
+                const failed = ruleStats.failed || 0;
+                const running = ruleStats.running || 0;
+                const pending = ruleStats.pending || 0;
+                
+                if (total === 0) continue;
+                
+                const percentage = Math.round((completed / total) * 100);
+                
+                const stageDiv = document.createElement('div');
+                stageDiv.className = 'space-y-1';
+                
+                stageDiv.innerHTML = `
+                    <div class="flex justify-between text-sm">
+                        <span class="font-semibold text-gray-700">${ruleName}</span>
+                        <span class="text-gray-600">${completed}/${total} (${percentage}%)</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: ${percentage}%"></div>
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        Running: ${running} | Pending: ${pending}${failed > 0 ? ` | Failed: ${failed}` : ''}
+                    </div>
+                `;
+                
+                progressStages.appendChild(stageDiv);
+            }
+            
+            // Update summary
+            const totalJobs = progress.total_jobs || 0;
+            const completedJobs = progress.completed_jobs || 0;
+            const failedJobs = progress.failed_jobs || 0;
+            
+            progressSummary.textContent = `Total: ${completedJobs}/${totalJobs} jobs completed${failedJobs > 0 ? `, ${failedJobs} failed` : ''}`;
+        }
+
+        async function toggleAutoIngestSnakemake() {
+            try {
+                const statusResponse = await fetch('/api/auto-ingest-snakemake/status');
+                const status = await statusResponse.json();
+                
+                if (!status.available) {
+                    alert('Auto-ingest Snakemake is not available. Please check that all dependencies are installed.');
+                    return;
+                }
+                
+                const isRunning = status.is_running;
+                const endpoint = isRunning ? '/api/auto-ingest-snakemake/stop' : '/api/auto-ingest-snakemake/start';
+                
+                autoIngestSmToggleBtn.disabled = true;
+                
+                const requestBody = isRunning ? {} : {
+                    watch_directory: workingDirInput.value || workingDirDisplay.textContent,
+                    preview_folder: previewFolderInput.value || null,
+                    model_name: modelInput.value,
+                    cores: parseInt(coresInput.value) || 8,
+                    resources_mem_gb: parseInt(memoryInput.value) || 12
+                };
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log(result.message);
+                    await fetchAutoIngestSnakemakeStatus();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                console.error('Failed to toggle auto-ingest Snakemake:', error);
+                alert('Failed to toggle auto-ingest Snakemake. See console for details.');
+            } finally {
+                autoIngestSmToggleBtn.disabled = false;
+            }
+        }
+
+        // Directory browser state and functions
+        let currentBrowserPath = '';
+        let currentParentPath = null;
+        const directoryModal = document.getElementById('directory-browser-modal');
+        const browseDirBtn = document.getElementById('browse-dir-btn');
+        const closeBrowserBtn = document.getElementById('close-browser-btn');
+        const cancelBrowserBtn = document.getElementById('cancel-browser-btn');
+        const selectDirBtn = document.getElementById('select-dir-btn');
+        const goUpBtn = document.getElementById('go-up-btn');
+        const currentPathDisplay = document.getElementById('current-path-display');
+        const directoryItems = document.getElementById('directory-items');
+        const browserLoading = document.getElementById('browser-loading');
+        const browserError = document.getElementById('browser-error');
+
+        // Open directory browser
+        function openDirectoryBrowser() {
+            // Start with current working directory or home directory
+            const startPath = workingDirInput.value || workingDirDisplay.textContent || '';
+            currentBrowserPath = startPath;
+            directoryModal.classList.remove('hidden');
+            loadDirectory(currentBrowserPath);
+        }
+
+        // Close directory browser
+        function closeDirectoryBrowser() {
+            directoryModal.classList.add('hidden');
+        }
+
+        // Load directory contents
+    async function loadDirectory(path) {
+            browserLoading.classList.remove('hidden');
+            browserError.classList.add('hidden');
+            directoryItems.innerHTML = '';
+            
+            try {
+        const url = `/api/browse-directory${path ? '?path=' + encodeURIComponent(path) : ''}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.message || `Failed to load directory: ${path}`);
+                }
+                
+                currentBrowserPath = data.current_path;
+                currentParentPath = data.parent_path;
+                currentPathDisplay.textContent = currentBrowserPath;
+                
+                // Enable/disable go up button
+                goUpBtn.disabled = !currentParentPath;
+                
+                // Render directory items
+                if (data.items.length === 0) {
+                    directoryItems.innerHTML = '<p class="text-gray-500 text-center py-4">This directory is empty</p>';
+                } else {
+                    data.items.forEach(item => {
+                        const itemDiv = createDirectoryItem(item);
+                        directoryItems.appendChild(itemDiv);
+                    });
+                }
+                
+                browserLoading.classList.add('hidden');
+            } catch (error) {
+                console.error('Failed to load directory:', error);
+                browserLoading.classList.add('hidden');
+                browserError.classList.remove('hidden');
+                browserError.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Create a directory item element
+        function createDirectoryItem(item) {
+            const div = document.createElement('div');
+            div.className = 'flex items-center p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 cursor-pointer transition';
+            
+            const icon = document.createElement('svg');
+            icon.className = 'w-5 h-5 mr-3 text-indigo-600';
+            icon.setAttribute('fill', 'none');
+            icon.setAttribute('stroke', 'currentColor');
+            icon.setAttribute('viewBox', '0 0 24 24');
+            icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>';
+            
+            const name = document.createElement('span');
+            name.className = 'text-gray-800 font-medium';
+            name.textContent = item.name;
+            
+            div.appendChild(icon);
+            div.appendChild(name);
+            
+            // Double-click to navigate into directory
+            div.addEventListener('dblclick', () => {
+                loadDirectory(item.path);
+            });
+            
+            // Single click to select (visual feedback)
+            div.addEventListener('click', () => {
+                // Remove previous selection
+                document.querySelectorAll('#directory-items > div').forEach(el => {
+                    el.classList.remove('bg-indigo-100', 'border-2', 'border-indigo-500');
+                });
+                // Add selection to this item
+                div.classList.add('bg-indigo-100', 'border-2', 'border-indigo-500');
+            });
+            
+            return div;
+        }
+
+        // Go up to parent directory
+        function goUpDirectory() {
+            if (currentParentPath) {
+                loadDirectory(currentParentPath);
+            }
+        }
+
+        // Select current directory
+        async function selectCurrentDirectory() {
+            const previousDir = workingDirInput.value;
+            workingDirInput.value = currentBrowserPath;
+            closeDirectoryBrowser();
+            
+            // Automatically set the working directory in the backend
+            try {
+                const workingDir = currentBrowserPath;
+                
+                const response = await fetch('/api/set-working-dir', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ working_dir: workingDir })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    consoleOutput.textContent += `\n[INFO] Working directory set to: ${workingDir}\n\n`;
+                    // Save to localStorage
+                    saveWorkingDirToStorage(workingDir);
+                    fetchStatus();
+                } else {
+                    alert(`Failed to set working directory: ${result.message}`);
+                    workingDirInput.value = previousDir;
+                }
+            } catch (error) {
+                console.error('Failed to set working directory:', error);
+                alert('Failed to set working directory. See console for details.');
+                workingDirInput.value = previousDir;
+            }
+        }
+
+        // Event listeners
+        browseDirBtn.addEventListener('click', openDirectoryBrowser);
+        closeBrowserBtn.addEventListener('click', closeDirectoryBrowser);
+        cancelBrowserBtn.addEventListener('click', closeDirectoryBrowser);
+        selectDirBtn.addEventListener('click', selectCurrentDirectory);
+        goUpBtn.addEventListener('click', goUpDirectory);
+        setWorkingDirBtn.addEventListener('click', setWorkingDirectory);
+        clearConsoleBtn.addEventListener('click', clearConsole);
+        stopScriptBtn.addEventListener('click', stopScript);
+        autoIngestSmToggleBtn.addEventListener('click', toggleAutoIngestSnakemake);
+
+        // Close modal on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !directoryModal.classList.contains('hidden')) {
+                closeDirectoryBrowser();
+            }
+        });
+
+        // Initialize
+        async function init() {
+            // Try to restore working directory from localStorage
+            const savedWorkingDir = loadWorkingDirFromStorage();
+            if (savedWorkingDir && savedWorkingDir.trim()) {
+                // Basic validation: ensure it's a non-empty string
+                // The backend will perform full validation
+                
+                // Try to set it on the backend first
+                try {
+                    const response = await fetch('/api/launcher/set-working-dir', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ working_dir: savedWorkingDir })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        console.log(`Restored working directory from localStorage: ${savedWorkingDir}`);
+                        // Only populate the input field if backend accepted it
+                        workingDirInput.value = savedWorkingDir;
+                    } else {
+                        // Backend rejected the saved path, clear it from localStorage
+                        console.warn(`Saved directory "${savedWorkingDir}" is invalid, clearing from localStorage`);
+                        try {
+                            localStorage.removeItem(WORKING_DIR_STORAGE_KEY);
+                        } catch (e) {
+                            // Ignore errors when clearing invalid data
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Failed to restore working directory on backend:', error);
+                    // Don't populate the input field if backend communication failed
+                    // The fetchStatus() call below will populate it with the backend's current value
+                }
+            }
+            
+            await fetchStatus();
+            await loadScripts();
+            await fetchAutoIngestSnakemakeStatus();
+            
+            // Start polling
+            if (!pollInterval) {
+                pollInterval = setInterval(() => {
+                    fetchStatus();
+                    fetchAutoIngestSnakemakeStatus();
+                    if (isRunning) {
+                        fetchOutput();
+                    }
+                }, 1000);
+            }
+        }
+
+        // Run initialization
+        init();
+    </script>
+</body>
+</html>
