@@ -457,10 +457,8 @@
                 autoIngestSmWatchDir.textContent = status.watch_directory || 'Unknown';
                 autoIngestSmPreviewFolder.textContent = status.preview_folder || 'Same as watch directory';
                 
-                // Show progress if processing
-                if (status.is_processing) {
-                    fetchSnakemakeProgress();
-                }
+                // Always fetch progress when service is running
+                fetchSnakemakeProgress();
             } else {
                 autoIngestSmStatusText.textContent = 'Status: Off';
                 autoIngestSmStatusText.className = 'text-sm font-medium text-gray-600';

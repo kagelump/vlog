@@ -215,6 +215,17 @@
                         <!-- Removed max-h-40 and overflow-y-auto to allow full expansion -->
                         <p id="modal-long-desc" class="text-xs text-gray-600 p-1 border rounded bg-gray-50"></p>
                     </div>
+                    
+                    <!-- Subtitle/Transcript -->
+                    <div id="subtitle-section" class="pt-2 border-t mt-3" style="display: none;">
+                        <div class="flex justify-between items-center mb-1">
+                            <h5 class="text-sm font-semibold text-gray-600">Transcript</h5>
+                            <button id="toggle-subtitle-btn" class="text-xs text-indigo-600 hover:text-indigo-800">
+                                Show
+                            </button>
+                        </div>
+                        <div id="subtitle-content" class="text-xs text-gray-600 p-2 border rounded bg-gray-50 max-h-60 overflow-y-auto" style="display: none; white-space: pre-wrap; font-family: monospace;"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -249,12 +260,18 @@
         const saveDurationBtn = document.getElementById('save-duration-btn');
         const modalCutDurationInfo = document.getElementById('modal-cut-duration-info');
         const modalCutSource = document.getElementById('modal-cut-source');
-        const quickSetButtonsContainer = document.getElementById('quick-set-buttons'); 
+        const quickSetButtonsContainer = document.getElementById('quick-set-buttons');
+        
+        // Subtitle Elements
+        const subtitleSection = document.getElementById('subtitle-section');
+        const subtitleContent = document.getElementById('subtitle-content');
+        const toggleSubtitleBtn = document.getElementById('toggle-subtitle-btn');
 
         // Global state for navigation and current file context
         let currentResults = []; // This will now hold metadata *without* thumbnails
         let currentIndex = -1;
         let currentFilename = null;
+        let currentSubtitle = null;
 
         // Map for keyboard shortcuts
         const durationKeyMap = {
@@ -542,6 +559,51 @@
         }
 
         /**
+         * Load subtitle for the current video.
+         */
+        async function loadSubtitle(filename) {
+            try {
+                const response = await fetch(`/api/subtitle/${encodeURIComponent(filename)}`);
+                if (!response.ok) {
+                    // Subtitle not available
+                    subtitleSection.style.display = 'none';
+                    currentSubtitle = null;
+                    return;
+                }
+                
+                const data = await response.json();
+                if (data.success && data.subtitle) {
+                    currentSubtitle = data.subtitle;
+                    subtitleContent.textContent = currentSubtitle;
+                    subtitleSection.style.display = 'block';
+                    // Reset to collapsed state
+                    subtitleContent.style.display = 'none';
+                    toggleSubtitleBtn.textContent = 'Show';
+                } else {
+                    subtitleSection.style.display = 'none';
+                    currentSubtitle = null;
+                }
+            } catch (error) {
+                console.error('Error loading subtitle:', error);
+                subtitleSection.style.display = 'none';
+                currentSubtitle = null;
+            }
+        }
+
+        /**
+         * Toggle subtitle visibility.
+         */
+        function toggleSubtitle() {
+            if (subtitleContent.style.display === 'none') {
+                subtitleContent.style.display = 'block';
+                toggleSubtitleBtn.textContent = 'Hide';
+            } else {
+                subtitleContent.style.display = 'none';
+                toggleSubtitleBtn.textContent = 'Show';
+            }
+        }
+
+        /**
          * Loads the data for a given index from the currentResults array and updates the modal content.
          */
         async function displayModalForIndex(index) {
@@ -628,6 +690,9 @@
             // Editing Decision Logic & UI Setup
             updateKeepStatusUI(result);
             updateCutDurationUI(result, 'load');
+            
+            // Load subtitle for this video
+            await loadSubtitle(result.filename);
 
 
             // 3. Show Modal if not already visible
@@ -875,6 +940,9 @@
         
         // --- Event Listeners for Editing Controls ---
         toggleKeepBtn.addEventListener('click', sendKeepUpdate);
+        
+        // Event listener for subtitle toggle
+        toggleSubtitleBtn.addEventListener('click', toggleSubtitle);
 
         // Delegation for the quick set duration buttons
         quickSetButtonsContainer.addEventListener('click', (e) => {
