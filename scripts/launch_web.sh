@@ -28,7 +28,7 @@ done
 CMD=(uv run -- python -m vlog.web)
 
 if [ -n "$PORT" ]; then
-  CMD+=(-- --port "$PORT")
+  CMD+=(--port "$PORT")
 fi
 
 if [ "$DETACHED" -eq 1 ]; then
