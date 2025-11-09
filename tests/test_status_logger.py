@@ -133,14 +133,16 @@ class TestWorkflowStatus(unittest.TestCase):
         self.assertEqual(status["rules"]["describe"]["expected_total"], 75)
     
     def test_expected_total_without_jobs(self):
-        """Test that expected_total can be set even without jobs yet."""
+        """Test that expected_total appears even without jobs yet."""
         self.status.set_expected_total("transcribe", 200)
         
         status = self.status.get_status()
         
-        # Should not appear in rules if no jobs registered yet
-        # (this is expected behavior - expected_total is only shown for rules with jobs)
-        self.assertNotIn("transcribe", status["rules"])
+        # Should appear in rules even if no jobs registered yet
+        # This allows monitoring the expected workload before jobs are created
+        self.assertIn("transcribe", status["rules"])
+        self.assertEqual(status["rules"]["transcribe"]["expected_total"], 200)
+        self.assertEqual(status["rules"]["transcribe"]["total"], 0)
 
 
 class TestStatusLogHandler(unittest.TestCase):

@@ -136,6 +136,7 @@ class WorkflowStatus:
                 "rules": {}
             }
             
+            # First, add all rules that have jobs
             for rule, jobs in self._jobs.items():
                 total = len(jobs["pending"]) + len(jobs["running"]) + len(jobs["completed"]) + len(jobs["failed"])
                 rule_status = {
@@ -149,6 +150,18 @@ class WorkflowStatus:
                 if rule in self._expected_totals:
                     rule_status["expected_total"] = self._expected_totals[rule]
                 status["rules"][rule] = rule_status
+            
+            # Also add rules that have expected totals but no jobs yet
+            for rule, expected_total in self._expected_totals.items():
+                if rule not in status["rules"]:
+                    status["rules"][rule] = {
+                        "total": 0,
+                        "pending": 0,
+                        "running": 0,
+                        "completed": 0,
+                        "failed": 0,
+                        "expected_total": expected_total
+                    }
             
             return status
     

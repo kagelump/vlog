@@ -80,10 +80,18 @@ The `/status` endpoint now returns `expected_total` for each rule (when availabl
 ### How It Works
 
 1. **Discovery Phase**: Snakemake workflow files call `set_expected_total()` after discovering input files
-2. **Logging**: The helper emits a custom log event with `event="SET_EXPECTED_TOTAL"`
-3. **Capture**: The logger plugin's `emit()` method captures this event
-4. **Storage**: Expected totals are stored in the `WorkflowStatus` tracker
-5. **API**: The `/status` endpoint includes `expected_total` in the response
+2. **Direct Storage**: The helper directly accesses the global `_workflow_status` object to store expected totals (works at parse time before logging is initialized)
+3. **Logging Fallback**: If direct access fails, it falls back to emitting a log event
+4. **API Response**: The `/status` endpoint includes `expected_total` for all rules (even those without jobs yet)
+
+### Parse-Time vs Runtime
+
+The key improvement is that `set_expected_total()` works at **parse time** (when Snakemake reads the workflow files), not just at runtime:
+
+- **Parse time**: Discovery functions run and call `set_expected_total()`
+- **Direct access**: Helper directly updates `_workflow_status._expected_totals`
+- **Immediate visibility**: Expected totals appear in API immediately, even before any jobs are created
+- **Job creation**: As Snakemake creates jobs, they're tracked alongside the expected totals
 
 ### Custom Log Event
 
@@ -149,7 +157,27 @@ for rule_name, rule_status in status["rules"].items():
 
 ## Notes
 
-- `expected_total` is optional and only appears if set by the workflow
+- `expected_total` appears in the API response even before jobs are created for that rule
 - Multiple calls to `set_expected_total()` for the same rule will update the value
 - The expected total is reset when the status tracker is reset
 - Jobs may be created lazily, so `total` may be less than `expected_total` initially
+
+## Troubleshooting
+
+**Problem**: `expected_total` not showing up in the API
+
+**Solution**: Make sure:
+1. The workflow file imports and calls `set_expected_total()` in the discovery function
+2. The discovery function is actually being called (it should run at parse time)
+3. The logger plugin is enabled with `--logger-plugin-settings vlog`
+4. Check stderr for debug messages: `[set_expected_total] rule_name: count`
+
+**Verify it's working**:
+```bash
+# You should see debug output when Snakemake parses the workflow
+snakemake ... 2>&1 | grep set_expected_total
+
+# Expected totals should appear in API even with 0 jobs
+curl http://127.0.0.1:5556/status | jq '.rules'
+```
+

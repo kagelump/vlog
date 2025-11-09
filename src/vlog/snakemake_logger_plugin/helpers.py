@@ -6,6 +6,7 @@ workflow files (*.smk) to send information to the status logger plugin.
 """
 
 import logging
+import sys
 
 
 def set_expected_total(rule_name: str, expected_total: int):
@@ -27,12 +28,23 @@ def set_expected_total(rule_name: str, expected_total: int):
         stems = discover_preview_videos()
         set_expected_total("transcribe", len(stems))
     """
-    logger = logging.getLogger("snakemake")
-    logger.info(
-        f"Setting expected total for {rule_name}: {expected_total}",
-        extra={
-            "event": "SET_EXPECTED_TOTAL",
-            "rule": rule_name,
-            "expected_total": expected_total
-        }
-    )
+    # First, try to set it directly on the global workflow status
+    # This works even during parse time before logging is initialized
+    try:
+        from vlog.snakemake_logger_plugin.logger import _workflow_status
+        _workflow_status.set_expected_total(rule_name, expected_total)
+        # Debug output to stderr so we can verify it's being called
+        print(f"[set_expected_total] {rule_name}: {expected_total}", file=sys.stderr, flush=True)
+    except Exception as e:
+        # Fallback: try logging (for when logger is initialized)
+        print(f"[set_expected_total] Direct call failed ({e}), trying logger", file=sys.stderr, flush=True)
+        logger = logging.getLogger("snakemake")
+        logger.info(
+            f"Setting expected total for {rule_name}: {expected_total}",
+            extra={
+                "event": "SET_EXPECTED_TOTAL",
+                "rule": rule_name,
+                "expected_total": expected_total
+            }
+        )
+
