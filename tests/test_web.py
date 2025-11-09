@@ -123,5 +123,65 @@ class TestWorkingDirEndpoints:
         assert 'required' in data['message'].lower()
 
 
+class TestMetadataAPI:
+    """Tests for the metadata API endpoint."""
+    
+    def test_metadata_endpoint_exists(self, client):
+        """Test that metadata endpoint exists and returns 200."""
+        response = client.get('/api/metadata')
+        assert response.status_code == 200
+    
+    def test_metadata_returns_json_array(self, client):
+        """Test that metadata returns JSON array."""
+        response = client.get('/api/metadata')
+        assert 'application/json' in response.content_type
+        data = response.get_json()
+        assert isinstance(data, list)
+    
+    def test_metadata_empty_when_no_videos(self, client, tmp_path, monkeypatch):
+        """Test that metadata returns empty array when no videos exist."""
+        # Mock the preview folder to point to an empty temp directory
+        import vlog.web as web_module
+        monkeypatch.setattr(web_module, 'working_directory', str(tmp_path))
+        
+        response = client.get('/api/metadata')
+        data = response.get_json()
+        assert data == []
+    
+    def test_metadata_returns_video_data(self, client, tmp_path, monkeypatch):
+        """Test that metadata returns video data when JSON files exist."""
+        # Create preview folder and add a test JSON file
+        preview_folder = tmp_path / 'videos' / 'preview'
+        preview_folder.mkdir(parents=True)
+        
+        test_video_data = {
+            'filename': 'test.mp4',
+            'video_description_short': 'Test video',
+            'video_description_long': 'A test video description',
+            'primary_shot_type': 'pov',
+            'tags': ['test'],
+            'keep': 1,
+            'rating': 0.8,
+            'video_length_seconds': 30.5,
+            'video_timestamp': '2024-01-01T10:00:00'
+        }
+        
+        json_file = preview_folder / 'test.json'
+        with open(json_file, 'w') as f:
+            json.dump(test_video_data, f)
+        
+        # Mock the working directory
+        import vlog.web as web_module
+        monkeypatch.setattr(web_module, 'working_directory', str(tmp_path))
+        
+        response = client.get('/api/metadata')
+        data = response.get_json()
+        
+        assert len(data) == 1
+        assert data[0]['filename'] == 'test.mp4'
+        assert data[0]['video_description_short'] == 'Test video'
+        assert 'video_thumbnail_base64' not in data[0]  # Should be removed
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
