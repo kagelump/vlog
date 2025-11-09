@@ -265,7 +265,14 @@
             <div id="empty-state" class="p-12 text-center hidden">
                 <div class="text-gray-400 text-5xl mb-4">📹</div>
                 <h3 class="text-xl font-semibold text-gray-900 mb-2">No Videos Found</h3>
-                <p class="text-gray-600">No classified videos match your current filters</p>
+                <p class="text-gray-600 mb-2">No classified videos match your current filters</p>
+                <div id="preview-folder-info" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-left max-w-2xl mx-auto">
+                    <p class="font-semibold text-blue-900 mb-1">Looking for videos in:</p>
+                    <p id="preview-folder-path" class="font-mono text-xs text-blue-800 break-all mb-2">Loading...</p>
+                    <p class="text-blue-700 text-xs">
+                        💡 To add videos: Process videos using the <a href="/" class="underline font-medium">Launcher</a> or run the ingestion pipeline.
+                    </p>
+                </div>
             </div>
             
             <!-- Table -->
@@ -1036,13 +1043,20 @@
             }
             
             try {
+                console.log('[vlog] Fetching video metadata from /api/metadata...');
                 const response = await fetch('/api/metadata');
+                console.log('[vlog] Metadata API response status:', response.status);
+                
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
+                console.log(`[vlog] Received ${data.length} video(s) from API`);
                 allResults = processSceneClustering(data);
+                
+                // Fetch and display preview folder path for debugging
+                fetchPreviewFolderInfo();
                 
                 // Update clip type filter options
                 updateClipTypeFilter();
@@ -1054,8 +1068,25 @@
                 elements.lastUpdated.textContent = new Date().toLocaleString();
                 
             } catch (error) {
-                console.error('Error fetching results:', error);
+                console.error('[vlog] Error fetching results:', error);
                 showError();
+            }
+        }
+        
+        async function fetchPreviewFolderInfo() {
+            try {
+                const response = await fetch('/api/project-info');
+                if (response.ok) {
+                    const data = await response.json();
+                    const previewPath = data.working_directory + '/videos/preview';
+                    const folderPathElem = document.getElementById('preview-folder-path');
+                    if (folderPathElem) {
+                        folderPathElem.textContent = previewPath;
+                    }
+                    console.log('[vlog] Preview folder:', previewPath);
+                }
+            } catch (error) {
+                console.error('[vlog] Error fetching preview folder info:', error);
             }
         }
         

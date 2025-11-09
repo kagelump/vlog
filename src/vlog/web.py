@@ -19,7 +19,7 @@ from vlog.web_file_browser import browse_server_directory
 
 # Get the vlog package directory (for static files)
 PACKAGE_DIR = Path(__file__).parent
-# Get the project root directory (for project info API)
+# Get the project root directory (for project info API and default working directory)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # --- Flask App Initialization ---
@@ -41,7 +41,9 @@ from vlog.auto_ingest_snakemake import AutoIngestSnakemakeService
 # Global auto-ingest service instances
 auto_ingest_snakemake_service: Optional[AutoIngestSnakemakeService] = None
 
-working_directory = os.getcwd()
+# Default working directory to project root for better UX
+# Can be overridden via /api/set-working-dir
+working_directory = str(PROJECT_ROOT)
 
 # --- Routes: Main Pages ---
 
@@ -349,13 +351,20 @@ def load_all_json_results():
     preview_folder = get_preview_folder().resolve()
     
     if not preview_folder.exists():
-        logger.warning(f"Preview folder does not exist: {preview_folder}")
+        logger.info(f"Preview folder does not exist: {preview_folder}")
+        logger.info(f"To populate with videos, run the ingestion pipeline or use the launcher UI")
         return []
     
     results = []
     # Use glob to find JSON files, then validate each path
     json_pattern = str(preview_folder / "*.json")
     json_files = glob.glob(json_pattern)
+    
+    if len(json_files) == 0:
+        logger.info(f"No JSON files found in preview folder: {preview_folder}")
+        logger.info(f"To populate with videos, run the ingestion pipeline or use the launcher UI")
+    else:
+        logger.info(f"Found {len(json_files)} JSON file(s) in {preview_folder}")
     
     for json_file in json_files:
         try:
@@ -388,7 +397,9 @@ def load_all_json_results():
 def get_metadata():
     """Get metadata for all classified videos (without base64 thumbnails)."""
     try:
+        logger.info(f"API /api/metadata called - loading results from {get_preview_folder()}")
         results = load_all_json_results()
+        logger.info(f"API /api/metadata returning {len(results)} video(s)")
         
         # Remove base64 thumbnails to reduce payload size (thumbnails served separately)
         for result in results:
@@ -574,6 +585,21 @@ if __name__ == '__main__':
     # Debug mode should be disabled in production
     # Use environment variable or command line flag to control debug mode
     debug_mode = args.debug or os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    
+    # Log startup information
+    logger.info("="*60)
+    logger.info("Starting vlog web server")
+    logger.info(f"  Host: {args.host}")
+    logger.info(f"  Port: {args.port}")
+    logger.info(f"  Working directory: {working_directory}")
+    logger.info(f"  Preview folder: {get_preview_folder()}")
+    logger.info(f"  Debug mode: {debug_mode}")
+    logger.info("="*60)
+    logger.info("")
+    logger.info("Access the application at:")
+    logger.info(f"  Launcher: http://{args.host}:{args.port}/")
+    logger.info(f"  Results:  http://{args.host}:{args.port}/results")
+    logger.info("")
     
     # Run with threading enabled to handle concurrent requests
     # This is critical for allowing API calls while Snakemake is running
