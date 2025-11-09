@@ -58,6 +58,26 @@ The launcher provides:
 - **Auto-Ingest**: Automatic monitoring and processing of new video files
 - Easy navigation to classification results
 
+### Classification Results Dashboard
+
+The integrated dashboard provides a **view-only** interface for browsing and reviewing classified video clips. Access it at http://localhost:5432/results when the web server is running.
+
+**Key Features:**
+- **Statistics Overview**: Total videos, keep/discard counts, duration, average rating
+- **Advanced Filtering**: 
+  - Search across descriptions
+  - Filter by keep/discard status
+  - Filter by clip type (POV, Insert, Establishing, Aerial, etc.)
+  - Filter by minimum rating (0.0 - 1.0 slider)
+- **Flexible Sorting**: By timestamp, rating, duration, or filename
+- **Scene Clustering**: Automatically groups videos within 30 minutes into color-coded scenes
+- **Detail Modal**: Click any video to view full details, play video, see transcript
+- **Auto-Refresh**: Configurable intervals (30s, 60s, 120s) or manual only
+- **Keyboard Navigation**: Arrow keys to navigate, Escape to close
+
+**View-Only Design:**
+The dashboard is strictly read-only - all editing decisions (keep/discard, duration trimming) are made by the AI model during the describe stage. This ensures consistency and eliminates manual data entry errors.
+
 ### Auto-Ingest Feature
 
 **NEW: Snakemake-Based Auto-Ingest** - The recommended approach for automatic video ingestion.
