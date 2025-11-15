@@ -1,3 +1,13 @@
+## Documentation
+
+- **[Project State & Onboarding Guide](docs/PROJECT_STATE.md)** - Complete overview of current state, known issues, and improvement roadmap for new engineers
+- **[Project Structure](docs/PROJECT_STRUCTURE.md)** - Detailed explanation of code organization
+- **[Snakemake Quick Start](docs/SNAKEMAKE_QUICKSTART.md)** - Get started with the workflow pipeline
+- **[Auto-Ingest Documentation](docs/AUTO_INGEST_SNAKEMAKE.md)** - Automatic video processing setup
+- **[DaVinci Resolve Integration](docs/DAVINCI_INTEGRATION.md)** - Import classified clips to DaVinci Resolve
+
+See the `docs/` directory for all documentation.
+
 ## Project Structure
 
 The project follows modern Python project organization conventions:
