@@ -4,6 +4,24 @@
 **Version:** 0.1.0  
 **Python Version:** 3.13 (pinned in `.python-version`)
 
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Quick Start for New Engineers](#quick-start-for-new-engineers)
+- [Architecture Overview](#architecture-overview)
+- [Project Structure](#project-structure)
+- [Workflows & Processing Pipelines](#workflows--processing-pipelines)
+- [Database Schema](#database-schema)
+- [Recent Changes & Fixes](#recent-changes--fixes)
+- [Testing Infrastructure](#testing-infrastructure)
+- [Configuration Management](#configuration-management)
+- [Known Issues & Technical Debt](#known-issues--technical-debt)
+- [Improvement Opportunities](#improvement-opportunities)
+- [Priority Action Items](#priority-action-items)
+- [Development Workflow](#development-workflow)
+- [Getting Help](#getting-help)
+- [Conclusion](#conclusion)
+
 ## Executive Summary
 
 vlog is a video logging and analysis application that uses machine learning (MLX-VLM) to automatically classify, transcribe, and describe video clips. The system combines multiple technologies into an integrated workflow for ingesting videos from cameras/SD cards, analyzing them with AI, and exporting them to video editing software (DaVinci Resolve).
