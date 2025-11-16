@@ -78,7 +78,7 @@ DAEMON_LOG_FILE = config.get("daemon_log_file", "logs/daemon.log")
 # Note: Each stage file has its own discovery function and rules
 
 # Stage 1: Copy videos from SD card
-# include: "snakefiles/copy.smk"
+include: "snakefiles/copy2.smk"
 
 # Stage 2: Generate and clean subtitles  
 include: "snakefiles/subtitles.smk"
@@ -92,9 +92,9 @@ include: "snakefiles/daemon.smk"
 # Default target - runs all stages
 rule all:
     input:
-        # Stage 1 outputs: main videos and previews
-        # expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()),
-        # expand(f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}", stem=discover_videos()),
+        # Stage 1 outputs: main videos and previews (Optionally copy to MAIN_FOLDER)
+        expand(f"{MAIN_FOLDER}/{{stem}}.mp4", stem=discover_videos()) if MAIN_FOLDER else [],
+        expand(f"{PREVIEW_FOLDER}/{{stem}}.{PREVIEW_EXT}", stem=discover_videos()),
         # Stage 2 outputs: cleaned subtitles
         expand(f"{PREVIEW_FOLDER}/{{stem}}_cleaned.srt", stem=discover_preview_videos()),
         

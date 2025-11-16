@@ -1,9 +1,14 @@
 # Snakemake Video Ingestion Configuration
 
-# SD Card mount point - adjust this to your SD card path
+# SD Card mount point(s) - can be a single path or comma-separated list
+# Examples:
+#   Single path: "/Volumes/SDCARD"
+#   Multiple paths: "/Volumes/SDCARD,/foo/bar,/another/path"
 sd_card_path: "/Volumes/SDCARD"
 
 # Output directories
+# main_folder: Optional - set to skip copying main files (only create previews)
+# Leave commented out or set to empty string to skip main file copying
 main_folder: "videos/main"
 preview_folder: "videos/preview"
 
