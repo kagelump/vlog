@@ -4,10 +4,25 @@
 # (this makes relinking in DaVinci Resolve straightforward).
 #
 # Requirements: ffmpeg, ffprobe (e.g. `brew install ffmpeg`)
-# Usage: place in the root of your media tree and run: ./make_proxies.sh
+# Usage: ./make_proxies.sh <input_dir> <output_dir>
 set -euo pipefail
 
-OUTROOT="Proxies"
+# Check arguments
+if [ $# -ne 2 ]; then
+  echo "Usage: $0 <input_dir> <output_dir>"
+  echo "  input_dir:  Directory containing source videos"
+  echo "  output_dir: Directory where proxies will be created"
+  exit 1
+fi
+
+INROOT="$1"
+OUTROOT="$2"
+
+# Validate input directory
+if [ ! -d "$INROOT" ]; then
+  echo "Error: Input directory does not exist: $INROOT"
+  exit 1
+fi
 CRF=28                 # 24-28 recommended for small proxies; lower = higher quality/larger files
 PRESET="slower"        # slower -> better compression; change to "fast" if you need speed
 AUDIO_BPS="64k"        # small audio
@@ -15,11 +30,11 @@ SHOULD_OVERWRITE=false # set to true to re-encode existing proxies
 
 mkdir -p "$OUTROOT"
 
-# Find all .mp4 files (case-insensitive), skip files already inside the OUTROOT
+# Find all .mp4 files (case-insensitive) in the input directory
 IFS=$'\n'
-for src in $(find . -type f -iname '*.mp4' -not -path "./$OUTROOT/*"); do
-  # Normalize path (remove leading ./)
-  rel="${src#./}"
+for src in $(find "$INROOT" -type f -iname '*.mp4'); do
+  # Get relative path from input root
+  rel="${src#$INROOT/}"
   dest_dir="$OUTROOT/$(dirname "$rel")"
   mkdir -p "$dest_dir"
   out="$dest_dir/$(basename "$src")"  # same filename (no suffix) to help Resolve relink
@@ -35,12 +50,18 @@ for src in $(find . -type f -iname '*.mp4' -not -path "./$OUTROOT/*"); do
 
   echo "Encoding: $src -> $out (fps=$fps)"
 
+  # Build ffmpeg command with optional fps arguments
+  fps_args=()
+  if [ -n "$fps" ]; then
+    fps_args=(-r "$fps" -vsync cfr)
+  fi
+
   # Run ffmpeg encode
   ffmpeg -y -hide_banner -loglevel error -i "$src" \
     -map_metadata 0 \
     -c:v libx264 -preset "$PRESET" -crf "$CRF" -profile:v high -level 4.1 -pix_fmt yuv420p \
     -vf "scale=-2:720" \
-    $( [ -n "$fps" ] && printf -- "-r %s -vsync cfr" "$fps" ) \
+    "${fps_args[@]}" \
     -c:a aac -b:a "$AUDIO_BPS" -ac 1 \
     -movflags +faststart \
     "$out"
