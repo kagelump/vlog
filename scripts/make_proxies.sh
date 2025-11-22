@@ -23,8 +23,8 @@ if [ ! -d "$INROOT" ]; then
   echo "Error: Input directory does not exist: $INROOT"
   exit 1
 fi
-CRF=28                 # 24-28 recommended for small proxies; lower = higher quality/larger files
-PRESET="slower"        # slower -> better compression; change to "fast" if you need speed
+
+BITRATE="2M"           # Target bitrate for proxies
 AUDIO_BPS="64k"        # small audio
 SHOULD_OVERWRITE=false # set to true to re-encode existing proxies
 
@@ -57,9 +57,9 @@ for src in $(find "$INROOT" -type f -iname '*.mp4'); do
   fi
 
   # Run ffmpeg encode
-  ffmpeg -y -hide_banner -loglevel error -i "$src" \
+  ffmpeg -y -hide_banner -stats -hwaccel videotoolbox -i "$src" \
     -map_metadata 0 \
-    -c:v libx264 -preset "$PRESET" -crf "$CRF" -profile:v high -level 4.1 -pix_fmt yuv420p \
+    -c:v h264_videotoolbox -b:v "$BITRATE" -profile:v high -level 4.1 -pix_fmt yuv420p \
     -vf "scale=-2:720" \
     "${fps_args[@]}" \
     -c:a aac -b:a "$AUDIO_BPS" -ac 1 \
